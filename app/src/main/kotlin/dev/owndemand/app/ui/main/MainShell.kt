@@ -221,6 +221,7 @@ private fun ShellContent(
             onFullscreenChange = mainVm::setWatchFullscreen,
             onBack = mainVm::closeWatch,
             onOpenChannel = mainVm::openChannelByName,
+            onPlay = mainVm::play,
         )
     } else {
         if (searchOpen) {

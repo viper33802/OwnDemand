@@ -10,9 +10,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/**
+ * State for watching exactly one video. Instances are cached per
+ * ratingKey for the activity's lifetime (WatchScreen keys them), so a VM
+ * must never switch to another video — otherwise reopening video A later
+ * returns A's cached VM showing whatever it was switched to. Up-next taps
+ * therefore navigate (MainViewModel.play) instead of reloading this VM.
+ */
 class WatchViewModel(
     private val container: AppContainer,
-    initialRatingKey: String,
+    private val ratingKey: String,
 ) : ViewModel() {
 
     private val _item = MutableStateFlow<ItemDto?>(null)
@@ -27,10 +34,10 @@ class WatchViewModel(
     val playback: PlaybackManager = container.playbackManager()
 
     init {
-        load(initialRatingKey)
+        load()
     }
 
-    fun load(ratingKey: String) {
+    private fun load() {
         viewModelScope.launch {
             _error.value = null
             try {
@@ -55,17 +62,20 @@ class WatchViewModel(
         }
     }
 
-    fun playNext(item: ItemDto) {
-        load(item.ratingKey)
-    }
-
     /**
-     * (Re)start playback if the player was stopped since this VM was
-     * created — covers re-entering the watch screen for the same video
-     * after closing the miniplayer.
+     * Called whenever the watch screen (re)opens this video. The VM is
+     * cached, so init (and its load) runs only the first time; on later
+     * entries the shared player may hold another video (e.g. one docked in
+     * the miniplayer) or nothing (miniplayer closed). In both cases reload:
+     * fresh detail (current resume offset) and a stream switch. Re-entering
+     * the video that is already playing keeps its position.
      */
-    fun replayIfIdle() {
-        val item = _item.value ?: return
-        if (playback.player.currentMediaItem == null) playback.play(item)
+    fun onEnter() {
+        if (_item.value == null) return // first load still in flight
+        if (playback.currentRatingKey != ratingKey ||
+            playback.player.currentMediaItem == null
+        ) {
+            load()
+        }
     }
 }

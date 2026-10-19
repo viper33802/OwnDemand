@@ -72,6 +72,8 @@ fun WatchScreen(
     onFullscreenChange: (Boolean) -> Unit,
     onBack: () -> Unit,
     onOpenChannel: (String) -> Unit,
+    /** Opens another video (Up next) as its own watch screen. */
+    onPlay: (String) -> Unit,
 ) {
     val vm: WatchViewModel = containerViewModel(key = ratingKey) { WatchViewModel(it, ratingKey) }
     val item by vm.item.collectAsStateWithLifecycle()
@@ -80,9 +82,10 @@ fun WatchScreen(
 
     // Leaving the watch screen hands playback to the miniplayer (M4): the
     // player keeps running and the timeline loop keeps reporting.
-    // Re-entering the same video resumes its position; replayIfIdle covers
-    // re-entry after the miniplayer was closed.
-    LaunchedEffect(ratingKey) { vm.replayIfIdle() }
+    // Re-entering the same video resumes its position; onEnter switches
+    // the player when it holds another video (or none) — the VM is cached
+    // per video, so its init does not run again.
+    LaunchedEffect(ratingKey) { vm.onEnter() }
 
     val activity = LocalContext.current.findActivity()
     val view = LocalView.current
@@ -255,7 +258,7 @@ fun WatchScreen(
                             FeedCard(
                                 item = next,
                                 artworkUrl = artworkFor(next),
-                                onClick = { vm.playNext(next) },
+                                onClick = { onPlay(next.ratingKey) },
                                 thumbnailWidth = 150.dp,
                             )
                         }
@@ -285,7 +288,7 @@ fun WatchScreen(
                         FeedCard(
                             item = next,
                             artworkUrl = artworkFor(next),
-                            onClick = { vm.playNext(next) },
+                            onClick = { onPlay(next.ratingKey) },
                             thumbnailWidth = 150.dp,
                         )
                     }

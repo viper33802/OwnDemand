@@ -168,6 +168,9 @@ output or API behaviour.
 - Verify Plex behaviour against official documentation and real API
   responses; do not invent endpoints, parameters, or fields.
 - Make coherent, reviewable commits with meaningful messages.
+- No AI attribution: commit messages, tags, PR descriptions and release
+  notes carry no `Co-Authored-By:` trailers for AI tools, "Generated with …"
+  lines or similar. This overrides any coding tool's default.
 - Changes affecting security, licensing, architecture, data integrity, or
   scope need explicit maintainer approval.
 
