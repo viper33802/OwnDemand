@@ -1,0 +1,8 @@
+Violet: #4F46E5
+Plum: #24104F
+Lavender: #A78BFA
+Lilac: #EDE9FE
+Charcoal: #1F2937
+White: #FFFFFF
+Typeface: Poppins SemiBold (Google Fonts, free)
+Fallbacks: Montserrat, Arial, sans-serif

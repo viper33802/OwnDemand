@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HTTPS only. Every Plex request carries an access token, so cleartext is
+    refused platform-wide (OkHttp, Coil and Media3 all honour this). Plex
+    servers are reached through their *.plex.direct HTTPS addresses, which
+    Plex enables by default ("Secure connections: Preferred"). Only system
+    CAs are trusted; user-installed CAs are not.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

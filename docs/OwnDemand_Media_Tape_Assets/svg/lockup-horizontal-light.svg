@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2942" height="600" viewBox="0 0 2942 600">
+ <g transform="translate(30 30) scale(.527)">
+ <rect width="1024" height="1024" rx="224" fill="#4F46E5"/>
+ <rect x="210" y="270" width="604" height="454" rx="64" fill="#A78BFA"/>
+ <path d="M250 330h524v230H250z" fill="#EDE9FE"/>
+ <circle cx="350" cy="445" r="62" fill="#4F46E5"/><circle cx="674" cy="445" r="62" fill="#4F46E5"/>
+ <path d="M468 391l112 65-112 65z" fill="#A78BFA"/>
+ <path d="M310 600h404l54 124H256z" fill="#EDE9FE"/>
+ <circle cx="420" cy="663" r="18" fill="#4F46E5"/><circle cx="604" cy="663" r="18" fill="#4F46E5"/>
+ </g>
+ <text x="650" y="405" font-family="Poppins, Montserrat, Arial, sans-serif" font-size="360" font-weight="600" letter-spacing="-16"><tspan fill="#4F46E5">Own</tspan><tspan fill="#1F2937">Demand</tspan></text>
+ </svg>

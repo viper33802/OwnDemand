@@ -1,0 +1,44 @@
+# Android build outputs
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Android Studio / IDE
+.idea/
+*.iml
+.DS_Store
+
+# Local analysis artifacts (keep local, never commit)
+/analysis/
+*.class
+
+# Signing keys and credentials
+*.jks
+*.keystore
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+
+# Local configuration and logs
+*.log
+*.tmp
+*.bak
+
+# Temporary files
+tmp/
+temp/
+
+# Local screenshot archives (may contain account names / third-party marks; not distributable)
+docs/tablet-survey/
+preview.jpg
+
+# Local archive of files removed from git (kept on disk, never committed)
+/archive/
