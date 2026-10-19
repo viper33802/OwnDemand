@@ -42,6 +42,8 @@ data class ResourceConnection(
     val address: String = "",
     val port: Int = 0,
     val local: Boolean = false,
+    /** Plex relay (bounced through Plex's servers): slow, used only as a last resort. */
+    val relay: Boolean = false,
     /**
      * Ready-to-use base URL from Plex, e.g.
      * `https://192-0-2-10.<serverToken>.plex.direct:32400`. The hostname

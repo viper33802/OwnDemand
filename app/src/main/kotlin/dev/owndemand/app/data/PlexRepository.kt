@@ -65,4 +65,7 @@ class PlexRepository(
 
     /** Marks a video watched on the server (see [PmsClient.scrobble]). */
     suspend fun scrobble(ratingKey: String): Boolean = client.scrobble(ratingKey)
+
+    /** Marks a video unwatched on the server (see [PmsClient.unscrobble]). */
+    suspend fun unscrobble(ratingKey: String): Boolean = client.unscrobble(ratingKey)
 }

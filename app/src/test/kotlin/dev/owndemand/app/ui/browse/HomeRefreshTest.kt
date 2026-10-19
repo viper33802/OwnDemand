@@ -11,18 +11,25 @@ import org.junit.Test
 /** Single-video updates patch Home in place; full reloads rebuild it. */
 class HomeRefreshTest {
 
-    private fun item(key: String, addedAt: Long = key.toLong(), viewOffset: Long = 0, viewCount: Int = 0) =
-        ItemDto(
-            ratingKey = key,
-            title = "Video $key",
-            addedAt = addedAt,
-            duration = 600_000,
-            viewOffset = viewOffset,
-            viewCount = viewCount,
-        )
+    private fun item(
+        key: String,
+        addedAt: Long = key.toLong(),
+        viewOffset: Long = 0,
+        viewCount: Int = 0,
+        lastViewedAt: Long = 0,
+    ) = ItemDto(
+        ratingKey = key,
+        title = "Video $key",
+        addedAt = addedAt,
+        duration = 600_000,
+        viewOffset = viewOffset,
+        viewCount = viewCount,
+        lastViewedAt = lastViewedAt,
+    )
 
     private val library = (1..30).map { item("$it") } +
-        item("31", viewOffset = 200_000) + item("32", viewOffset = 300_000)
+        item("31", viewOffset = 200_000, lastViewedAt = 100) +
+        item("32", viewOffset = 300_000, lastViewedAt = 200)
 
     private fun loaded(generation: Int = 1): HomeUiState =
         HomeUiState().withIndex(LibraryIndexSnapshot(library, false, null, generation), seed = 7)
@@ -49,13 +56,13 @@ class HomeRefreshTest {
     }
 
     @Test
-    fun `continue watching updates progress, drops finished, adds newly part-watched first`() {
+    fun `continue watching updates progress, drops finished, puts the latest first`() {
         val before = loaded()
-        assertEquals(setOf("31", "32"), before.continueWatching.map { it.ratingKey }.toSet())
+        assertEquals(listOf("32", "31"), before.continueWatching.map { it.ratingKey })
 
-        var updated = replaceItem(library, item("31", viewOffset = 450_000)) // progress moved
-        updated = replaceItem(updated, item("32", viewCount = 1))            // finished
-        updated = replaceItem(updated, item("7", viewOffset = 120_000))      // started and left
+        var updated = replaceItem(library, item("31", viewOffset = 450_000, lastViewedAt = 300)) // progress moved
+        updated = replaceItem(updated, item("32", viewCount = 1, lastViewedAt = 250))            // finished
+        updated = replaceItem(updated, item("7", viewOffset = 120_000, lastViewedAt = 400))      // started and left
         val after = before.withIndex(LibraryIndexSnapshot(updated, false, null, generation = 1), seed = 7)
 
         assertEquals(listOf("7", "31"), after.continueWatching.map { it.ratingKey })

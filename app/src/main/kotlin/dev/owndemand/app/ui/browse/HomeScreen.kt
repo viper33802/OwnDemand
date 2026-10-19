@@ -2,6 +2,7 @@ package dev.owndemand.app.ui.browse
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import dev.owndemand.app.ui.common.videoClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,6 +73,8 @@ fun HomeScreen(
     container: AppContainer,
     onPlay: (String) -> Unit,
     onSearch: () -> Unit,
+    /** "See all" on the Continue-watching row → the Library tab. */
+    onSeeAllContinue: () -> Unit = {},
 ) {
     val vm: HomeViewModel = containerViewModel { HomeViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -109,6 +114,7 @@ fun HomeScreen(
                         items = state.continueWatching,
                         artworkFor = artworkFor,
                         onPlay = onPlay,
+                        onSeeAll = onSeeAllContinue,
                     )
                 }
             }
@@ -229,15 +235,22 @@ private fun ContinueWatchingRow(
     items: List<ItemDto>,
     artworkFor: (ItemDto) -> String,
     onPlay: (String) -> Unit,
+    onSeeAll: () -> Unit,
 ) {
     Column(
         Modifier.padding(vertical = 4.dp)
     ) {
-        Text(
-            "Continue watching",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        )
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Continue watching",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            TextButton(onClick = onSeeAll) { Text("See all") }
+        }
         // 200 dp on phones (unchanged), 260 dp on tablet (T2).
         val cardWidth = LocalLayoutMode.current.rowCardWidth()
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -245,7 +258,7 @@ private fun ContinueWatchingRow(
                 Column(
                     Modifier
                         .width(cardWidth)
-                        .clickable { onPlay(item.ratingKey) },
+                        .videoClickable(item) { onPlay(item.ratingKey) },
                 ) {
                     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                         AsyncImage(
@@ -304,7 +317,7 @@ fun FeedCard(
     if (thumbnailWidth != null) {
         // Horizontal variant for up-next lists.
         Row(
-            modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier.videoClickable(item, onClick).padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             ThumbnailBadge(item = item, artworkUrl = artworkUrl, modifier = Modifier.width(thumbnailWidth))
             Spacer(Modifier.width(10.dp))
@@ -328,7 +341,7 @@ fun FeedCard(
             }
         }
     } else {
-        Column(modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Column(modifier.fillMaxWidth().videoClickable(item, onClick)) {
             ThumbnailBadge(item = item, artworkUrl = artworkUrl, modifier = Modifier.fillMaxWidth())
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(
@@ -383,6 +396,21 @@ private fun ThumbnailBadge(
                         .background(Color(0xFFA78BFA)),
                 )
             }
+        }
+        // "New": never played and added within the last 7 days.
+        if (isNewVideo(item, System.currentTimeMillis() / 1000)) {
+            Text(
+                "New",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF4F46E5))
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
         }
         if (item.isFullyWatched) {
             Row(

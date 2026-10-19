@@ -88,24 +88,15 @@ class LibraryIndex {
         if (inPlace) _refreshing.value = true else _loading.value = true
         _error.value = null
         try {
-            val repository = container.repository()
-            val all = ArrayList<ItemDto>(800)
-            var start = 0
-            while (true) {
-                val (page, total) = repository.feed(sectionKey, start, PAGE_SIZE)
-                if (page.isEmpty()) break
-                all += page
-                start += page.size
-                if (start >= total) break
-            }
-            val channels = ArrayList<CollectionDto>(64)
-            start = 0
-            while (true) {
-                val (page, total) = repository.collections(sectionKey, start, PAGE_SIZE)
-                if (page.isEmpty()) break
-                channels += page
-                start += page.size
-                if (start >= total) break
+            // Make sure the server's address answers first (cheap when it was
+            // confirmed recently); if the load still fails, re-check — e.g.
+            // the phone just left home Wi-Fi — and retry once on a new address.
+            container.connections.ensureReachable()
+            val (all, channels) = try {
+                fetchAll(container, sectionKey)
+            } catch (e: Exception) {
+                if (!container.connections.ensureReachable(maxAgeMs = 0)) throw e
+                fetchAll(container, sectionKey)
             }
             _items.value = all
             _collections.value = channels
@@ -118,6 +109,33 @@ class LibraryIndex {
             _refreshing.value = false
             inFlight = false
         }
+    }
+
+    /** Every video and every channel of the section, page by page. */
+    private suspend fun fetchAll(
+        container: AppContainer,
+        sectionKey: String,
+    ): Pair<List<ItemDto>, List<CollectionDto>> {
+        val repository = container.repository()
+        val all = ArrayList<ItemDto>(800)
+        var start = 0
+        while (true) {
+            val (page, total) = repository.feed(sectionKey, start, PAGE_SIZE)
+            if (page.isEmpty()) break
+            all += page
+            start += page.size
+            if (start >= total) break
+        }
+        val channels = ArrayList<CollectionDto>(64)
+        start = 0
+        while (true) {
+            val (page, total) = repository.collections(sectionKey, start, PAGE_SIZE)
+            if (page.isEmpty()) break
+            channels += page
+            start += page.size
+            if (start >= total) break
+        }
+        return all to channels
     }
 
     companion object {

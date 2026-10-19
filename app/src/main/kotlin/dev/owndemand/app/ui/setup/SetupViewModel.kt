@@ -131,8 +131,14 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
         _state.value = SetupUiState.Working("Connecting to ${server.name}…")
         viewModelScope.launch {
             try {
-                container.pmsClient(server).verifyIdentity()
-                container.settingsRepository.setServer(server)
+                // Use whichever advertised address answers (home first), so
+                // setting up away from home works too.
+                val reachable = dev.owndemand.app.data.selectReachable(server.candidates) {
+                    container.connections.probe(server, it)
+                }
+                val chosen = if (reachable != null) server.copy(baseUrl = reachable) else server
+                container.pmsClient(chosen).verifyIdentity() // surfaces the real error if none answered
+                container.settingsRepository.setServer(chosen)
                 // Navigation advances automatically once settings.hasServer is true.
                 _state.value = SetupUiState.Idle
             } catch (e: Exception) {

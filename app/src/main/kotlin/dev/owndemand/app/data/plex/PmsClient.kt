@@ -161,6 +161,24 @@ class PmsClient(
         false
     }
 
+    /** Marks an item unwatched (viewCount and resume offset cleared): PMS `/:/unscrobble`. */
+    suspend fun unscrobble(ratingKey: String): Boolean = try {
+        val url = pmsUrl("/:/unscrobble")
+            .newBuilder()
+            .addQueryParameter("identifier", "com.plexapp.plugins.library")
+            .addQueryParameter("key", ratingKey)
+            .build()
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(url)
+                .header("X-Plex-Token", server.accessToken)
+                .build()
+            http.newCall(request).execute().use { it.isSuccessful }
+        }
+    } catch (e: Exception) {
+        false
+    }
+
     private fun pmsUrl(path: String): HttpUrl = (server.baseUrl + path).toHttpUrl()
 
     /** GET with X-Plex-Container-* paging headers (feed-style). */

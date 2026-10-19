@@ -31,7 +31,8 @@ import kotlinx.coroutines.launch
  */
 class PlaybackManager(
     context: Context,
-    private val repository: PlexRepository,
+    /** The repository for the server's *current* address (it can change). */
+    private val repositoryProvider: () -> PlexRepository,
     clientIdentifier: String,
     private val scope: CoroutineScope,
     /**
@@ -40,7 +41,15 @@ class PlaybackManager(
      * it — so the app can re-read its watched state / resume offset.
      */
     private val onItemSettled: (String) -> Unit = {},
+    /**
+     * Called before retrying after a network drop; returns true when the
+     * server's address changed (e.g. left home Wi-Fi), in which case the
+     * video restarts from the new address at the same position.
+     */
+    private val recoverAddress: suspend () -> Boolean = { false },
 ) {
+    private val repository: PlexRepository get() = repositoryProvider()
+
     companion object {
         private const val TIMELINE_INTERVAL_MS = 10_000L
 
@@ -282,6 +291,11 @@ class PlaybackManager(
             val attempt = networkRetries++
             delay(RETRY_BACKOFF_MS[attempt.coerceAtMost(RETRY_BACKOFF_MS.size - 1)])
             if (_currentItem.value == null) return@launch
+            if (recoverAddress()) {
+                // Another address answered: rebuild the stream URLs from it.
+                onAddressChanged(position)
+                return@launch
+            }
             player.seekTo(position)
             player.prepare()
             player.playWhenReady = true
@@ -312,6 +326,18 @@ class PlaybackManager(
             reported?.join()
             onItemSettled(ratingKey)
         }
+    }
+
+    /**
+     * The server's address changed: restart the current video from the new
+     * address at the same position, keeping play/pause as it was.
+     */
+    fun onAddressChanged(positionMs: Long = player.currentPosition) {
+        val item = _currentItem.value ?: return
+        if (player.currentMediaItem == null) return
+        val wasPlaying = player.playWhenReady
+        play(item.copy(viewOffset = positionMs.coerceAtLeast(0)))
+        player.playWhenReady = wasPlaying
     }
 
     /** Stop playback and report the position for resume. */

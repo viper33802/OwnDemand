@@ -30,6 +30,11 @@ data class AppSettings(
     /** Text-size multiplier over the system font scale; 1 = as-is (user
      * direction 2026-10-16: some prefer larger, keep the default untouched). */
     val fontScale: Float = 1f,
+    /**
+     * Videos removed from Continue watching: ratingKey -> resume offset at
+     * the time. A video shows again once its progress moves on.
+     */
+    val hiddenContinue: Map<String, Long> = emptyMap(),
 ) {
     val isSignedIn: Boolean get() = accountToken != null
     val hasServer: Boolean get() = server != null
@@ -38,6 +43,9 @@ data class AppSettings(
 }
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("owndemand_settings")
+
+/** Hidden Continue-watching entries kept (oldest dropped beyond this). */
+private const val MAX_HIDDEN = 200
 
 /**
  * Persistent configuration. Tokens are stored only as Keystore-encrypted
@@ -55,6 +63,8 @@ class SettingsRepository(
         val SERVER_NAME = stringPreferencesKey("server_name")
         val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
         val SERVER_TOKEN = byteArrayPreferencesKey("server_token")
+        /** All HTTPS addresses, best first, newline-separated. */
+        val SERVER_CONNECTIONS = stringPreferencesKey("server_connections")
         val LIBRARY_KEY = stringPreferencesKey("library_key")
         val LIBRARY_UUID = stringPreferencesKey("library_uuid")
         val LIBRARY_TITLE = stringPreferencesKey("library_title")
@@ -62,6 +72,8 @@ class SettingsRepository(
         val DATA_SAVER = androidx.datastore.preferences.core.booleanPreferencesKey("data_saver")
         val ACCOUNT_USERNAME = stringPreferencesKey("account_username")
         val FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("font_scale")
+        /** "ratingKey:offsetMs" entries — see [AppSettings.hiddenContinue]. */
+        val HIDDEN_CONTINUE = androidx.datastore.preferences.core.stringSetPreferencesKey("hidden_continue_watching")
     }
 
     private val store = context.applicationContext.dataStore
@@ -81,6 +93,10 @@ class SettingsRepository(
                 dataSaver = prefs[Keys.DATA_SAVER] == true,
                 accountUsername = prefs[Keys.ACCOUNT_USERNAME],
                 fontScale = prefs[Keys.FONT_SCALE] ?: 1f,
+                hiddenContinue = prefs[Keys.HIDDEN_CONTINUE].orEmpty().mapNotNull { entry ->
+                    val key = entry.substringBefore(':')
+                    entry.substringAfter(':', "").toLongOrNull()?.let { key to it }
+                }.toMap(),
             )
         }
 
@@ -94,6 +110,17 @@ class SettingsRepository(
         return store.data.first()[Keys.CLIENT_ID].orEmpty()
     }
 
+    /** Removes a video from Continue watching until its progress changes. */
+    suspend fun hideFromContinueWatching(ratingKey: String, viewOffsetMs: Long) = store.edit { prefs ->
+        val kept = prefs[Keys.HIDDEN_CONTINUE].orEmpty()
+            .filterNot { it.substringBefore(':') == ratingKey }
+            .takeLast(MAX_HIDDEN - 1)
+        prefs[Keys.HIDDEN_CONTINUE] = (kept + "$ratingKey:$viewOffsetMs").toSet()
+    }
+
+    /** The stored account token, or null when signed out. */
+    suspend fun currentAccountToken(): String? = settings.first().accountToken
+
     suspend fun setAccountToken(token: String) =
         store.edit { it[Keys.ACCOUNT_TOKEN] = tokenStore.encrypt(token) }
 
@@ -106,7 +133,27 @@ class SettingsRepository(
         prefs[Keys.SERVER_NAME] = server.name
         prefs[Keys.SERVER_BASE_URL] = server.baseUrl
         prefs[Keys.SERVER_TOKEN] = tokenStore.encrypt(server.accessToken)
+        prefs[Keys.SERVER_CONNECTIONS] = server.connections.joinToString("\n")
     }
+
+    /** Switches the address in use (one of the server's [PlexServer.connections]). */
+    suspend fun setServerAddress(baseUrl: String) = store.edit { prefs ->
+        if (baseUrl.startsWith("https://")) prefs[Keys.SERVER_BASE_URL] = baseUrl
+    }
+
+    /**
+     * Replaces the server's address list (and its access token, which Plex
+     * may rotate) after a fresh read from plex.tv; the address in use is kept
+     * unless it is no longer advertised.
+     */
+    suspend fun updateServerConnections(connections: List<String>, accessToken: String) =
+        store.edit { prefs ->
+            val https = connections.filter { it.startsWith("https://") }
+            if (https.isEmpty()) return@edit
+            prefs[Keys.SERVER_CONNECTIONS] = https.joinToString("\n")
+            if (prefs[Keys.SERVER_BASE_URL] !in https) prefs[Keys.SERVER_BASE_URL] = https.first()
+            if (accessToken.isNotBlank()) prefs[Keys.SERVER_TOKEN] = tokenStore.encrypt(accessToken)
+        }
 
     suspend fun setLibrary(library: PlexLibrary) = store.edit { prefs ->
         prefs[Keys.LIBRARY_KEY] = library.key
@@ -123,6 +170,7 @@ class SettingsRepository(
         prefs.remove(Keys.SERVER_NAME)
         prefs.remove(Keys.SERVER_BASE_URL)
         prefs.remove(Keys.SERVER_TOKEN)
+        prefs.remove(Keys.SERVER_CONNECTIONS)
         clearLibraryKeys(prefs)
     }
 
@@ -147,6 +195,7 @@ class SettingsRepository(
         prefs.remove(Keys.SERVER_NAME)
         prefs.remove(Keys.SERVER_BASE_URL)
         prefs.remove(Keys.SERVER_TOKEN)
+        prefs.remove(Keys.SERVER_CONNECTIONS)
         clearLibraryKeys(prefs)
     }
 
@@ -163,7 +212,9 @@ class SettingsRepository(
         // HTTPS only; a server saved by an older build over http must be re-picked.
         val baseUrl = prefs[Keys.SERVER_BASE_URL]?.takeIf { it.startsWith("https://") } ?: return null
         val token = prefs[Keys.SERVER_TOKEN]?.let { tokenStore.decrypt(it) } ?: return null
-        return PlexServer(machineId, name, baseUrl, token)
+        val connections = prefs[Keys.SERVER_CONNECTIONS].orEmpty()
+            .split('\n').filter { it.startsWith("https://") }
+        return PlexServer(machineId, name, baseUrl, token, connections)
     }
 
     private fun readLibrary(prefs: Preferences): PlexLibrary? {
