@@ -138,6 +138,29 @@ class PmsClient(
         false
     }
 
+    /**
+     * Marks an item watched (viewCount + 1, resume offset cleared) — PMS
+     * `/:/scrobble` with the library identifier, as Plex's own clients and
+     * python-plexapi use it. Best-effort like the timeline: failures are
+     * swallowed and the next refresh shows the server's real state.
+     */
+    suspend fun scrobble(ratingKey: String): Boolean = try {
+        val url = pmsUrl("/:/scrobble")
+            .newBuilder()
+            .addQueryParameter("identifier", "com.plexapp.plugins.library")
+            .addQueryParameter("key", ratingKey)
+            .build()
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(url)
+                .header("X-Plex-Token", server.accessToken)
+                .build()
+            http.newCall(request).execute().use { it.isSuccessful }
+        }
+    } catch (e: Exception) {
+        false
+    }
+
     private fun pmsUrl(path: String): HttpUrl = (server.baseUrl + path).toHttpUrl()
 
     /** GET with X-Plex-Container-* paging headers (feed-style). */

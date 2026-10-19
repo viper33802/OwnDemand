@@ -3,6 +3,7 @@ package dev.owndemand.app.ui.channels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.owndemand.app.AppContainer
+import dev.owndemand.app.data.replaceItem
 import dev.owndemand.app.data.plex.dto.CollectionDto
 import dev.owndemand.app.data.plex.dto.ItemDto
 import dev.owndemand.app.ui.browse.HomeSort
@@ -29,6 +30,33 @@ class ChannelsViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         loadMore()
+    }
+
+    /**
+     * Pull-to-refresh (tablet rail, alongside the open channel): reloads as
+     * many channels as are already shown, in place.
+     */
+    fun refresh() {
+        if (loading) return
+        loading = true
+        _state.value = _state.value.copy(refreshing = true, error = null)
+        viewModelScope.launch {
+            try {
+                val sectionKey = container.currentSectionKey
+                    ?: error("no library selected")
+                val (page, total) = container.repository()
+                    .collections(sectionKey, 0, maxOf(PAGE_SIZE, loadedCount))
+                loadedCount = page.size
+                _state.value = PagedListState(items = page, totalSize = total)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    refreshing = false,
+                    error = e.localizedMessage ?: "Could not refresh channels.",
+                )
+            } finally {
+                loading = false
+            }
+        }
     }
 
     fun loadMore() {
@@ -85,6 +113,15 @@ class ChannelDetailViewModel(
 
     init {
         loadAll()
+        // A video finished or was left somewhere: swap in its fresh copy
+        // (watched chip, progress) if it belongs to this channel.
+        viewModelScope.launch {
+            container.libraryIndex.updates.collect { fresh ->
+                val s = _state.value
+                val patched = replaceItem(s.items, fresh)
+                if (patched !== s.items) _state.value = s.copy(items = patched)
+            }
+        }
     }
 
     fun setSort(sort: HomeSort) {
@@ -94,9 +131,16 @@ class ChannelDetailViewModel(
     /** Retry button. */
     fun loadMore() = loadAll()
 
-    private fun loadAll() {
-        if (_state.value.loading) return
-        _state.value = _state.value.copy(loading = true, error = null)
+    /** Pull-to-refresh: reload the channel, keeping its videos shown. */
+    fun refresh() = loadAll(inPlace = true)
+
+    private fun loadAll(inPlace: Boolean = false) {
+        if (_state.value.loading || _state.value.refreshing) return
+        _state.value = if (inPlace) {
+            _state.value.copy(refreshing = true, error = null)
+        } else {
+            _state.value.copy(loading = true, error = null)
+        }
         viewModelScope.launch {
             try {
                 val all = ArrayList<ItemDto>()
@@ -112,6 +156,7 @@ class ChannelDetailViewModel(
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     loading = false,
+                    refreshing = false,
                     error = e.localizedMessage ?: "Could not load this channel.",
                 )
             }

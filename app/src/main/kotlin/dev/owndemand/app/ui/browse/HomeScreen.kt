@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -91,9 +94,12 @@ fun HomeScreen(
         // pixel-identical to the survey baseline.
         val columns = LocalLayoutMode.current.browseColumns()
         val gutter = if (columns > 1) 12.dp else 0.dp
+        // Pull down at the top to reload the library (new videos, watched
+        // states); the current feed stays up until the new one arrives.
+        RefreshableBox(refreshing = state.refreshing, onRefresh = vm::refresh) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = gutter),
             horizontalArrangement = Arrangement.spacedBy(gutter),
         ) {
@@ -148,7 +154,28 @@ fun HomeScreen(
                 Spacer(Modifier.height(80.dp))
             }
         }
+        }
     }
+}
+
+/**
+ * Material 3 pull-to-refresh around a scrollable list: pull down at the
+ * top to call [onRefresh]; the indicator spins while [refreshing].
+ * Shared by Home and the channel pages.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RefreshableBox(
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize(),
+    ) { content() }
 }
 
 /** Wordmark + search / sort controls (M5). */

@@ -6,6 +6,8 @@ data class PagedListState<T>(
     val totalSize: Int = 0,
     val loading: Boolean = false,
     val error: String? = null,
+    /** Pull-to-refresh in progress; [items] stay shown until replaced. */
+    val refreshing: Boolean = false,
 ) {
     val loadedAll: Boolean get() = !loading && items.size >= totalSize && totalSize > 0
 }
