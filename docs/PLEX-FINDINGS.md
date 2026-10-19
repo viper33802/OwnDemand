@@ -421,3 +421,20 @@ Verified against the live server while building the Channels/Playlists tabs:
   preview indexes for them yet. App behaviour: timestamp-only scrub preview.
   Server-side fix: the library agent's "Generate video preview media"
   setting (user action).
+
+## 16. Chunk 3: quality caps, transcode sessions (2026-10-19)
+
+- **Caps:** `videoResolution=1280x720&maxVideoBitrate=4000` on
+  `/video/:/transcode/universal/start.m3u8` is honoured: a 1080p h264
+  source came back as a **1280x720, ~2.5 Mbps** HLS video track (logged
+  from the player's selected track format). A 1080p source under the
+  1080p cap direct-plays (no conversion). The 1080p conversion parameters
+  (`videoResolution=1920x1080&maxVideoBitrate=8000`) only apply to taller
+  sources; none were available to test.
+- **Sessions:** each playback start sends its own `session=<uuid>`; when
+  the player switches away, `/video/:/transcode/universal/stop?session=`
+  ends the server-side conversion.
+- **Pitfall:** right after switching from a direct-played 1080p file to a
+  720p conversion, Media3's `onVideoSizeChanged` can still report
+  1920x1080 (decoder reuse). Judge delivered quality by the selected
+  track's `Format`, not the decoder output size.

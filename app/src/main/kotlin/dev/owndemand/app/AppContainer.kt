@@ -173,11 +173,24 @@ class AppContainer(context: Context) {
 
     private var networkJob: Job? = null
 
+    private val _metered = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** True on mobile data / metered networks: picks the mobile quality cap. */
+    val metered: kotlinx.coroutines.flow.StateFlow<Boolean> = _metered
+
     init {
         // Wi-Fi ↔ mobile data (leaving or reaching home): re-check the address
         // once the new network has settled.
         val cm = appContext.getSystemService(ConnectivityManager::class.java)
         cm?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(
+                network: Network,
+                caps: android.net.NetworkCapabilities,
+            ) {
+                _metered.value =
+                    !caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            }
+
             override fun onAvailable(network: Network) {
                 appScope.launch {
                     networkJob?.cancel()

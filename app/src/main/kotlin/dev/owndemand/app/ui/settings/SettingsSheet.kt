@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.owndemand.app.data.settings.AppSettings
+import dev.owndemand.app.domain.VideoQuality
 import dev.owndemand.app.ui.readableWidth
 
 /**
@@ -48,7 +52,8 @@ fun SettingsSheet(
     onSignOut: () -> Unit,
     onChangeLibrary: () -> Unit,
     onSwitchServer: () -> Unit,
-    onDataSaverChange: (Boolean) -> Unit,
+    onQualityChange: (wifi: Boolean, quality: VideoQuality) -> Unit,
+    onAutoplayChange: (Boolean) -> Unit,
     onFontScaleChange: (Float) -> Unit,
 ) {
     var detailsOpen by remember { mutableStateOf(false) }
@@ -83,20 +88,30 @@ fun SettingsSheet(
         HorizontalDivider()
         Spacer(Modifier.height(16.dp))
 
-        // Playback quality (M6).
+        // Playback quality (Chunk 3): a maximum per network type.
+        Text("Maximum quality", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Videos above the limit are converted by your Plex server; lower ones play as-is",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        QualityRow("On Wi-Fi", settings.qualityWifi) { onQualityChange(true, it) }
+        QualityRow("On mobile data", settings.qualityMobile) { onQualityChange(false, it) }
+
+        Spacer(Modifier.height(12.dp))
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Data saver", style = MaterialTheme.typography.bodyLarge)
+                Text("Autoplay next", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Stream everything transcoded to 480p instead of original quality",
+                    "When a video ends, play the next one after a 5-second countdown",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(checked = settings.dataSaver, onCheckedChange = onDataSaverChange)
+            Switch(checked = settings.autoplay, onCheckedChange = onAutoplayChange)
         }
 
         Spacer(Modifier.height(20.dp))
@@ -220,6 +235,32 @@ private fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
                         .weight(1f)
                         .verticalScroll(rememberScrollState()),
                 )
+            }
+        }
+    }
+}
+
+/** One quality cap: label on the left, current choice opening a short list. */
+@Composable
+private fun QualityRow(label: String, value: VideoQuality, onChange: (VideoQuality) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().widthIn(max = 480.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Box {
+            TextButton(onClick = { open = true }) { Text(value.label) }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                VideoQuality.entries.forEach { q ->
+                    DropdownMenuItem(
+                        text = { Text(q.label) },
+                        onClick = {
+                            onChange(q)
+                            open = false
+                        },
+                    )
+                }
             }
         }
     }

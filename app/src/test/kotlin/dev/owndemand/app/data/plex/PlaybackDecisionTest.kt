@@ -101,7 +101,7 @@ class PlaybackDecisionTest {
     @Test
     fun `data saver hls url adds the verified quality caps`() {
         val server = PlexServer("id", "My Server", "https://x.plex.direct:32400", "tok")
-        val url = PlaybackDecision.hlsTranscodeUrl(server, "12345", dataSaver = true)
+        val url = PlaybackDecision.hlsTranscodeUrl(server, "12345", dev.owndemand.app.domain.VideoQuality.Q480)
         assertTrue(url.endsWith("&maxVideoBitrate=1200&videoQuality=480p&audioBitrate=128"))
     }
 

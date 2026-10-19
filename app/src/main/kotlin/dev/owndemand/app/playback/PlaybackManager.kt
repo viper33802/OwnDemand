@@ -61,9 +61,25 @@ class PlaybackManager(
         private val RETRY_BACKOFF_MS = longArrayOf(1_000, 2_000, 4_000, 8_000)
     }
 
-    /** Data saver: always transcode capped to 480p/1200k (Settings tab). */
+    /** Maximum quality for the current network (Wi-Fi or mobile setting). */
     @Volatile
-    var dataSaver: Boolean = false
+    var quality: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Original
+        private set
+
+    /**
+     * Applies a new cap (setting changed, or Wi-Fi <-> mobile data). The
+     * playing video switches streams at the same position, but only when
+     * the cap actually changes what is played.
+     */
+    fun setQuality(newQuality: dev.owndemand.app.domain.VideoQuality) {
+        if (newQuality == quality) return
+        val old = quality
+        quality = newQuality
+        val item = _currentItem.value ?: return
+        if (player.currentMediaItem == null) return
+        val repo = repository
+        if (repo.streamUri(item, old) != repo.streamUri(item, newQuality)) onAddressChanged()
+    }
 
     // PMS returns 400 for the transcode endpoints unless the standard
     // X-Plex-* identification headers accompany the token (M3 HLS fix).
@@ -175,6 +191,20 @@ class PlaybackManager(
 
     init {
         player.addListener(object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                _tracks.value = tracks
+                tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }.forEach { g ->
+                    for (i in 0 until g.length) if (g.isTrackSelected(i)) {
+                        val f = g.getTrackFormat(i)
+                        android.util.Log.i(
+                            "OwnDemand",
+                            "video track ${f.width}x${f.height} ${f.sampleMimeType ?: f.codecs} " +
+                                "${f.bitrate / 1000} kbps, media ${player.currentMediaItem?.localConfiguration?.mimeType ?: "progressive"}",
+                        )
+                    }
+                }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _isBuffering.value = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) finishCurrent()
@@ -183,6 +213,14 @@ class PlaybackManager(
     }
 
     val currentRatingKey: String? get() = _currentItem.value?.ratingKey
+
+    private val _endedKey = MutableStateFlow<String?>(null)
+
+    /** The video that just played to its end (cleared when anything plays). */
+    val endedKey: StateFlow<String?> = _endedKey.asStateFlow()
+
+    /** Server-side conversion currently feeding the player, if any. */
+    private var transcodeSession: String? = null
 
     /** The ratingKey whose end-of-video handling already ran (once per playback). */
     private var endHandledKey: String? = null
@@ -193,6 +231,7 @@ class PlaybackManager(
             if (previous.ratingKey != item.ratingKey) settleAfter(previous.ratingKey, report("stopped"))
         }
         endHandledKey = null
+        _endedKey.value = null
         _currentItem.value = item
         _error.value = null
         _reconnecting.value = false
@@ -215,25 +254,30 @@ class PlaybackManager(
                 }
             }
         }
-        val subtitle = repository.subtitleUri(item)
-        _hasSubtitles.value = subtitle != null
+        val subtitles = repository.subtitleSidecars(item)
+        _hasSubtitles.value = subtitles.isNotEmpty()
         player.setPlaybackSpeed(_speed.value)
-        val (uri, mime) = repository.streamUri(item, dataSaver)
+        // One transcode session per start; the previous one is stopped.
+        transcodeSession?.let { old -> scope.launch { repository.stopTranscode(old) } }
+        val session = java.util.UUID.randomUUID().toString()
+        val (uri, mime) = repository.streamUri(item, quality, session)
+        transcodeSession = if (mime != null) session else null
+        android.util.Log.i("OwnDemand", "stream: ${if (mime == null) "direct" else "transcode"}, cap ${quality.label}")
         val builder = MediaItem.Builder()
             .setUri(uri)
             .apply { mime?.let { setMimeType(it) } }
             .setMediaId(item.ratingKey)
-        if (subtitle != null) {
+        // Every subtitle file the video has (Chunk 3), so the CC menu can
+        // offer each language; the preferred one is picked automatically.
+        if (subtitles.isNotEmpty()) {
             builder.setSubtitleConfigurations(
-                listOf(
-                    MediaItem.SubtitleConfiguration.Builder(
-                        android.net.Uri.parse(subtitle.first),
-                    )
+                subtitles.map { sub ->
+                    MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(sub.url))
                         .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                        .setLanguage("en")
-                        .setLabel(subtitle.second)
-                        .build(),
-                ),
+                        .setLanguage(sub.language ?: "en")
+                        .setLabel(sub.label)
+                        .build()
+                },
             )
         }
         player.setMediaItem(builder.build())
@@ -264,13 +308,55 @@ class PlaybackManager(
         applyCaptions()
     }
 
+    private val _tracks = MutableStateFlow(androidx.media3.common.Tracks.EMPTY)
+
+    /** The current video's tracks (for the subtitle / audio menu). */
+    val tracks: StateFlow<androidx.media3.common.Tracks> = _tracks.asStateFlow()
+
+    /** Subtitle language carried over to the next video (menu choice). */
+    private var preferredTextLanguage: String = "en"
+
+    /** Subtitle menu: a specific track, or null for off. The language sticks. */
+    fun selectSubtitle(option: TrackOption?) {
+        if (option == null) {
+            _captionsEnabled.value = false
+            applyCaptions()
+            return
+        }
+        _captionsEnabled.value = true
+        option.language?.let { preferredTextLanguage = it }
+        val group = player.currentTracks.groups.getOrNull(option.groupIndex) ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(
+                androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, option.trackIndex),
+            )
+            .build()
+    }
+
+    /** Audio menu: plays the chosen audio track of this video. */
+    fun selectAudio(option: TrackOption) {
+        val group = player.currentTracks.groups.getOrNull(option.groupIndex) ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setOverrideForType(
+                androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, option.trackIndex),
+            )
+            .build()
+    }
+
     private fun applyCaptions() {
         // The sidecar has no Plex "default" flag, so enabling the TEXT
         // type alone is not enough — steer selection with the language.
+        // A menu choice for a previous video does not carry over as a
+        // track override, only as the preferred language.
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !_captionsEnabled.value)
-            .setPreferredTextLanguage(if (_captionsEnabled.value) "en" else null)
+            .setPreferredTextLanguage(if (_captionsEnabled.value) preferredTextLanguage else null)
             .build()
     }
 
@@ -311,6 +397,7 @@ class PlaybackManager(
         val item = _currentItem.value ?: return
         if (endHandledKey == item.ratingKey) return
         endHandledKey = item.ratingKey
+        _endedKey.value = item.ratingKey
         val duration = if (player.duration > 0) player.duration else item.duration
         val reported = report("stopped", timeMs = duration)
         scope.launch {
@@ -345,6 +432,9 @@ class PlaybackManager(
         _currentItem.value?.let { settleAfter(it.ratingKey, report("stopped")) }
         timelineJob?.cancel()
         retryJob?.cancel()
+        transcodeSession?.let { old -> scope.launch { repository.stopTranscode(old) } }
+        transcodeSession = null
+        _endedKey.value = null
         player.stop()
         player.clearMediaItems()
         _currentItem.value = null

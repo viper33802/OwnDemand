@@ -258,6 +258,7 @@ private fun ShellContent(
             onBack = mainVm::closeWatch,
             onOpenChannel = mainVm::openChannelByName,
             onPlay = mainVm::play,
+            onAutoplay = { mainVm.play(it, keepFullscreen = true) },
         )
     } else {
         if (searchOpen) {
@@ -286,7 +287,8 @@ private fun ShellContent(
                 onSignOut = mainVm::signOut,
                 onChangeLibrary = mainVm::changeLibrary,
                 onSwitchServer = mainVm::switchServer,
-                onDataSaverChange = mainVm::setDataSaver,
+                onQualityChange = mainVm::setQuality,
+                onAutoplayChange = mainVm::setAutoplay,
                 onFontScaleChange = mainVm::setFontScale,
             )
         }

@@ -23,8 +23,12 @@ data class AppSettings(
     val accountToken: String?,
     val server: PlexServer?,
     val library: PlexLibrary?,
-    /** Transcode everything to 480p/1200k instead of direct-playing (M6). */
-    val dataSaver: Boolean = false,
+    /** Maximum quality on Wi-Fi / unmetered networks (Chunk 3). */
+    val qualityWifi: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Original,
+    /** Maximum quality on mobile / metered networks (Chunk 3). */
+    val qualityMobile: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Q720,
+    /** Play the first Up-next video after a 5 s countdown (on by default). */
+    val autoplay: Boolean = true,
     /** Plex account name, shown in Settings (user direction 2026-10-16). */
     val accountUsername: String? = null,
     /** Text-size multiplier over the system font scale; 1 = as-is (user
@@ -69,7 +73,11 @@ class SettingsRepository(
         val LIBRARY_UUID = stringPreferencesKey("library_uuid")
         val LIBRARY_TITLE = stringPreferencesKey("library_title")
         val LIBRARY_TYPE = stringPreferencesKey("library_type")
+        /** Pre-Chunk-3 on/off data saver; only read once, to migrate. */
         val DATA_SAVER = androidx.datastore.preferences.core.booleanPreferencesKey("data_saver")
+        val QUALITY_WIFI = stringPreferencesKey("quality_wifi")
+        val QUALITY_MOBILE = stringPreferencesKey("quality_mobile")
+        val AUTOPLAY = androidx.datastore.preferences.core.booleanPreferencesKey("autoplay")
         val ACCOUNT_USERNAME = stringPreferencesKey("account_username")
         val FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("font_scale")
         /** "ratingKey:offsetMs" entries — see [AppSettings.hiddenContinue]. */
@@ -90,7 +98,11 @@ class SettingsRepository(
                 accountToken = prefs[Keys.ACCOUNT_TOKEN]?.let { tokenStore.decrypt(it) },
                 server = readServer(prefs),
                 library = readLibrary(prefs),
-                dataSaver = prefs[Keys.DATA_SAVER] == true,
+                qualityWifi = dev.owndemand.app.domain.VideoQuality.fromName(prefs[Keys.QUALITY_WIFI])
+                    ?: dev.owndemand.app.domain.VideoQuality.Original,
+                qualityMobile = dev.owndemand.app.domain.VideoQuality.fromName(prefs[Keys.QUALITY_MOBILE])
+                    ?: dev.owndemand.app.domain.VideoQuality.Q720,
+                autoplay = prefs[Keys.AUTOPLAY] ?: true,
                 accountUsername = prefs[Keys.ACCOUNT_USERNAME],
                 fontScale = prefs[Keys.FONT_SCALE] ?: 1f,
                 hiddenContinue = prefs[Keys.HIDDEN_CONTINUE].orEmpty().mapNotNull { entry ->
@@ -177,9 +189,28 @@ class SettingsRepository(
     /** Drops only the library selection (e.g. when the library disappears). */
     suspend fun clearLibrary() = store.edit { clearLibraryKeys(it) }
 
-    /** Data saver playback mode (M6). */
-    suspend fun setDataSaver(enabled: Boolean) = store.edit { prefs ->
-        if (enabled) prefs[Keys.DATA_SAVER] = true else prefs.remove(Keys.DATA_SAVER)
+    /**
+     * One-time move from the old data-saver switch to the two quality
+     * lists: data saver on → 480p for both; an existing install otherwise
+     * keeps Original for both (nothing changes on upgrade); a fresh install
+     * gets the defaults (Wi-Fi Original, mobile 720p).
+     */
+    suspend fun ensureQualitySettings() = store.edit { prefs ->
+        if (prefs[Keys.QUALITY_WIFI] != null && prefs[Keys.QUALITY_MOBILE] != null) return@edit
+        val (wifi, mobile) = initialQuality(
+            dataSaverWasOn = prefs[Keys.DATA_SAVER] == true,
+            existingInstall = prefs[Keys.SERVER_MACHINE_ID] != null,
+        )
+        prefs[Keys.QUALITY_WIFI] = wifi.name
+        prefs[Keys.QUALITY_MOBILE] = mobile.name
+        prefs.remove(Keys.DATA_SAVER)
+    }
+
+    suspend fun setQuality(wifi: Boolean, quality: dev.owndemand.app.domain.VideoQuality) =
+        store.edit { it[if (wifi) Keys.QUALITY_WIFI else Keys.QUALITY_MOBILE] = quality.name }
+
+    suspend fun setAutoplay(enabled: Boolean) = store.edit { prefs ->
+        prefs[Keys.AUTOPLAY] = enabled
     }
 
     /** App-wide text-size multiplier; 1f clears it back to the system scale. */
@@ -224,4 +255,14 @@ class SettingsRepository(
         val type = prefs[Keys.LIBRARY_TYPE] ?: return null
         return PlexLibrary(key, uuid, title, type)
     }
+}
+
+/** First quality settings (see [SettingsRepository.ensureQualitySettings]); pure for tests. */
+fun initialQuality(
+    dataSaverWasOn: Boolean,
+    existingInstall: Boolean,
+): Pair<dev.owndemand.app.domain.VideoQuality, dev.owndemand.app.domain.VideoQuality> = when {
+    dataSaverWasOn -> dev.owndemand.app.domain.VideoQuality.Q480 to dev.owndemand.app.domain.VideoQuality.Q480
+    existingInstall -> dev.owndemand.app.domain.VideoQuality.Original to dev.owndemand.app.domain.VideoQuality.Original
+    else -> dev.owndemand.app.domain.VideoQuality.Original to dev.owndemand.app.domain.VideoQuality.Q720
 }

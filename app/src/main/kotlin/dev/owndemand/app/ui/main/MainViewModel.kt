@@ -29,8 +29,9 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     val watchKey = MutableStateFlow<String?>(null)
     val watchFullscreen = MutableStateFlow(false)
 
-    fun play(ratingKey: String) {
-        watchFullscreen.value = false
+    /** Opens a video; autoplay keeps fullscreen ([keepFullscreen]). */
+    fun play(ratingKey: String, keepFullscreen: Boolean = false) {
+        if (!keepFullscreen) watchFullscreen.value = false
         watchKey.value = ratingKey
     }
 
@@ -90,9 +91,15 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             container.settingsRepository.settings.collect { s ->
                 container.currentServer = s.server
                 container.currentSectionKey = s.library?.key
-                // Keep the live player in sync with the quality preference.
-                runCatching { container.playbackManager().dataSaver = s.dataSaver }
             }
+        }
+        // Quality cap: the Wi-Fi or mobile-data setting, by current network.
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(
+                container.settingsRepository.settings,
+                container.metered,
+            ) { s, metered -> if (metered) s.qualityMobile else s.qualityWifi }
+                .collect { q -> runCatching { container.playbackManager().setQuality(q) } }
         }
         // Server address: confirm it answers, then refresh the address list
         // from plex.tv (installs predating the list stored only one address;
@@ -140,8 +147,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Data saver playback mode (M6); applies from the next video. */
-    fun setDataSaver(enabled: Boolean) {
-        viewModelScope.launch { container.settingsRepository.setDataSaver(enabled) }
+    fun setQuality(wifi: Boolean, quality: dev.owndemand.app.domain.VideoQuality) {
+        viewModelScope.launch { container.settingsRepository.setQuality(wifi, quality) }
+    }
+
+    fun setAutoplay(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setAutoplay(enabled) }
     }
 
     /** App-wide text size, from the Settings slider. */

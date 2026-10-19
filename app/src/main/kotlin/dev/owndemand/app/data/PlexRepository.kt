@@ -37,24 +37,37 @@ class PlexRepository(
      * Stream URI + mime type for an item, decided client-side
      * (see [PlaybackDecision]); null mime lets Media3 sniff.
      */
-    fun streamUri(item: ItemDto, dataSaver: Boolean = false): Pair<String, String?> {
-        val part = if (dataSaver) null else PlaybackDecision.directPlayPart(item)
+    fun streamUri(
+        item: ItemDto,
+        quality: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Original,
+        transcodeSession: String? = null,
+    ): Pair<String, String?> {
+        val part = PlaybackDecision.directPlayPart(item, quality)
         return if (part != null && part.key.isNotBlank()) {
             PlaybackDecision.directMediaUrl(server, part.key) to null
         } else {
-            PlaybackDecision.hlsTranscodeUrl(server, item.ratingKey, dataSaver) to "application/x-mpegURL"
+            PlaybackDecision.hlsTranscodeUrl(server, item.ratingKey, quality, transcodeSession) to
+                "application/x-mpegURL"
         }
     }
 
+    /** Ends a server-side conversion the player no longer needs (best-effort). */
+    suspend fun stopTranscode(session: String): Boolean = client.stopTranscode(session)
+
     /** First playable subtitle sidecar (SRT) for the item, if any. */
-    fun subtitleUri(item: ItemDto): Pair<String, String>? {
-        val stream = item.Media.firstOrNull()?.Part
-            ?.flatMap { it.subtitleStreams }
-            ?.firstOrNull { it.format.lowercase() == "srt" || it.codec.lowercase() == "srt" }
-            ?: return null
-        val url = PlaybackDecision.subtitleUrl(server, stream) ?: return null
-        return url to (stream.language ?: "Subtitles")
-    }
+    /** Every SRT subtitle file of [item] (Plex sidecars), in server order. */
+    fun subtitleSidecars(item: ItemDto): List<SubtitleSidecar> =
+        item.Media.firstOrNull()?.Part.orEmpty()
+            .flatMap { it.subtitleStreams }
+            .filter { it.format.lowercase() == "srt" || it.codec.lowercase() == "srt" }
+            .mapNotNull { stream ->
+                val url = PlaybackDecision.subtitleUrl(server, stream) ?: return@mapNotNull null
+                SubtitleSidecar(
+                    url = url,
+                    language = stream.languageTag ?: stream.languageCode,
+                    label = stream.language ?: stream.displayTitle ?: "Subtitles",
+                )
+            }
 
     suspend fun reportTimeline(
         ratingKey: String,
@@ -69,3 +82,6 @@ class PlexRepository(
     /** Marks a video unwatched on the server (see [PmsClient.unscrobble]). */
     suspend fun unscrobble(ratingKey: String): Boolean = client.unscrobble(ratingKey)
 }
+
+/** A subtitle file the player can load alongside the video. */
+data class SubtitleSidecar(val url: String, val language: String?, val label: String)
