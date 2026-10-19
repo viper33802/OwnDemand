@@ -62,4 +62,7 @@ class PlexRepository(
         timeMs: Long,
         durationMs: Long,
     ): Boolean = client.reportTimeline(ratingKey, state, timeMs, durationMs)
+
+    /** Marks a video watched on the server (see [PmsClient.scrobble]). */
+    suspend fun scrobble(ratingKey: String): Boolean = client.scrobble(ratingKey)
 }

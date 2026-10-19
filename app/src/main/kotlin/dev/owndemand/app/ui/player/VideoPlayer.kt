@@ -100,7 +100,10 @@ fun VideoPlayer(
     var scrubbing by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableLongStateOf(0L) }
     var speedBoost by remember { mutableStateOf(false) }
-    var ripple by remember { mutableStateOf<Pair<Boolean, Long>?>(null) }
+    // Current run of ±10 s steps (double-tap, tap-to-continue, ±10 buttons)
+    // and whether its bubble is showing.
+    var burst by remember { mutableStateOf<SeekBurst?>(null) }
+    var bubbleVisible by remember { mutableStateOf(false) }
     var interactionTick by remember { mutableLongStateOf(0L) }
     // Live read of controlsVisible for the gesture closures (they are
     // created once and must see the current value).
@@ -132,14 +135,27 @@ fun VideoPlayer(
         }
     }
 
-    LaunchedEffect(ripple) {
-        if (ripple != null) {
-            kotlinx.coroutines.delay(700)
-            ripple = null
+    LaunchedEffect(burst) {
+        if (burst != null) {
+            bubbleVisible = true
+            kotlinx.coroutines.delay(SEEK_BURST_WINDOW_MS)
+            bubbleVisible = false
         }
     }
 
+    /** One (or [steps]) ±10 s seek, accumulated into the bubble's running total. */
+    fun seekStep(forward: Boolean, steps: Int = 1) {
+        val now = android.os.SystemClock.uptimeMillis()
+        var b = burst
+        repeat(steps) { b = nextSeekBurst(b, forward, now) }
+        burst = b
+        manager.seekBy(if (forward) SEEK_STEP_MS * steps else -SEEK_STEP_MS * steps)
+        interactionTick = System.currentTimeMillis()
+    }
+
     val latestOnDock by rememberUpdatedState(onDock)
+    val latestOnToggleFullscreen by rememberUpdatedState(onToggleFullscreen)
+    val fullscreenLive = rememberUpdatedState(fullscreen)
     // Long-press 2x boost: remember the user's chosen speed to restore.
     var boostBaseSpeed by remember { mutableStateOf(1f) }
     val setSpeedBoost = rememberUpdatedState<(Boolean) -> Unit> { on ->
@@ -188,8 +204,11 @@ fun VideoPlayer(
                                 zoom.reset() // double-tap while zoomed snaps back
                             } else {
                                 val forward = offset.x > size.width / 2f
-                                manager.seekBy(if (forward) 10_000 else -10_000)
-                                ripple = forward to System.currentTimeMillis()
+                                // Inside a live burst the tap-to-continue
+                                // handler normally takes each tap; a double
+                                // tap that still lands here counts as two.
+                                val live = burst?.isLive(android.os.SystemClock.uptimeMillis()) == true
+                                seekStep(forward, steps = if (live) 2 else 1)
                             }
                             interactionTick = System.currentTimeMillis()
                         },
@@ -211,9 +230,32 @@ fun VideoPlayer(
                         ) {
                             return@awaitEachGesture
                         }
+                        // Tap-to-continue: while a seek bubble is up, every
+                        // tap on a half seeks 10 s that way at once (the tap
+                        // detector would wait out its double-tap timeout).
+                        // A tap is consumed here so it never toggles controls.
+                        if (burst?.isLive(down.uptimeMillis) == true) {
+                            val up = withTimeoutOrNull(400L) {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val change =
+                                        event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull null
+                                    if (!change.pressed) return@withTimeoutOrNull change
+                                    val moved = change.position - down.position
+                                    if (abs(moved.x) > 18f || abs(moved.y) > 18f) return@withTimeoutOrNull null
+                                }
+                                @Suppress("UNREACHABLE_CODE") null
+                            }
+                            if (up != null) {
+                                up.consume()
+                                seekStep(forward = down.position.x > size.width / 2f)
+                                return@awaitEachGesture
+                            }
+                        }
                         val startX = down.position.x
-                        var mode = 0 // 0 tap · 1 dock drag · 2 speed boost
+                        var mode = 0 // 0 tap · 1 dock drag · 2 speed boost · 3 fullscreen swipe
                         var docked = false
+                        var expanded = false
                         try {
                             val decided = withTimeoutOrNull(400L) {
                                 while (true) {
@@ -228,17 +270,15 @@ fun VideoPlayer(
                                     }
                                     val dx = change.position.x - startX
                                     val dy = change.position.y - down.position.y
-                                    if (dy > 18f && dy >= abs(dx)) {
-                                        // Dragging toward the description area:
-                                        // dock to the miniplayer, reference behavior.
-                                        mode = 1
-                                        break
-                                    }
-                                    if (abs(dx) > 18f || dy < -18f) {
-                                        // Horizontal belongs to the scrubber;
-                                        // an upward drag does nothing.
-                                        mode = 0
-                                        break
+                                    when (classifyPlayerDrag(dx, dy, fullscreenLive.value)) {
+                                        // Toward the description area: dock to
+                                        // the miniplayer.
+                                        PlayerDrag.Dock -> { mode = 1; break }
+                                        // Upward on the inline player: fullscreen.
+                                        PlayerDrag.Fullscreen -> { mode = 3; break }
+                                        // Sideways belongs to the scrubber.
+                                        PlayerDrag.Ignore -> { mode = 0; break }
+                                        PlayerDrag.Undecided -> Unit
                                     }
                                 }
                                 true
@@ -256,9 +296,17 @@ fun VideoPlayer(
                                         1 -> {
                                             change.consume()
                                             val dy = change.position.y - down.position.y
-                                            if (!docked && dy > size.height * 0.35f) {
+                                            if (!docked && dy > size.height * DRAG_COMMIT_FRACTION) {
                                                 docked = true
                                                 latestOnDock()
+                                            }
+                                        }
+                                        3 -> {
+                                            change.consume()
+                                            val dy = change.position.y - down.position.y
+                                            if (!expanded && -dy > size.height * DRAG_COMMIT_FRACTION) {
+                                                expanded = true
+                                                latestOnToggleFullscreen()
                                             }
                                         }
                                         2 -> change.consume()
@@ -294,11 +342,12 @@ fun VideoPlayer(
                 )
             }
 
-            ripple?.let { (forward, _) ->
+            burst?.takeIf { bubbleVisible }?.let { b ->
                 SeekRipple(
-                    forward = forward,
+                    forward = b.forward,
+                    label = b.label,
                     modifier = Modifier.align(
-                        if (forward) Alignment.CenterEnd else Alignment.CenterStart,
+                        if (b.forward) Alignment.CenterEnd else Alignment.CenterStart,
                     ),
                 )
             }
@@ -332,10 +381,8 @@ fun VideoPlayer(
                     manager.togglePlayPause()
                     interactionTick = System.currentTimeMillis()
                 },
-                onSeekBy = { delta ->
-                    manager.seekBy(delta)
-                    interactionTick = System.currentTimeMillis()
-                },
+                // ±10 buttons feed the same running total as the taps.
+                onSeekBy = { delta -> seekStep(forward = delta > 0) },
                 onScrubStart = { scrubbing = true; scrubPositionMs = positionMs },
                 onScrub = { scrubPositionMs = it },
                 onScrubEnd = {
@@ -764,7 +811,7 @@ private fun Scrubber(
 }
 
 @Composable
-private fun SeekRipple(forward: Boolean, modifier: Modifier = Modifier) {
+private fun SeekRipple(forward: Boolean, label: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.padding(horizontal = 40.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -775,9 +822,9 @@ private fun SeekRipple(forward: Boolean, modifier: Modifier = Modifier) {
                 tint = Color.White, modifier = Modifier.size(28.dp),
             )
             Spacer(Modifier.width(6.dp))
-            Text("+10s", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         } else {
-            Text("-10s", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.width(6.dp))
             Icon(
                 painterResource(R.drawable.ic_seek_back), null,

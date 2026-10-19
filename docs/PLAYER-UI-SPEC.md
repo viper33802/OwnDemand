@@ -43,10 +43,13 @@ Times: `m:ss` under 1 h, `h:mm:ss` above.
 | --- | --- | --- |
 | Single tap video | Toggle controls | Controls fade |
 | (no input) | Auto-hide controls | ~3 s after show/last input; never while scrubbing; paused = stay |
-| Double-tap right half | Seek **+10 s** | Circular ripple bloom at tap point + `»` triangles + "+10 s" label, ~700 ms |
-| Double-tap left half | Seek **−10 s** | mirrored `«` + "−10 s" |
+| Double-tap right half | Seek **+10 s** | `»` + running-total bubble ("+10s"), ~700 ms after the last step |
+| Double-tap left half | Seek **−10 s** | mirrored `«` + "−10s" |
+| **Single tap while the bubble is up** | **Tap-to-continue**: another 10 s on that side (the other side starts a new count) | Bubble shows the running total — double-tap + 3 taps = "+40s"; never toggles controls |
+| ±10 s buttons (controls) | Seek ±10 s per tap | Same running-total bubble as the taps |
 | Long-press anywhere (playing) | Temporary **2× speed** | Rounded chip top-center "⏩ 2x speed"; release restores 1× |
 | **Downward drag from video** | **Dock to miniplayer** (playback continues) | Watch screen closes; live video appears in the mini bar (user direction 2026-10-16) |
+| **Upward drag on the inline player** | **Enter fullscreen** (same as the fullscreen button) | 35 % of the player height commits; ignored in fullscreen and while zoomed (user direction 2026-10-19) |
 | Horizontal drag on scrubber | Scrub | **BIF preview frame** (`/library/parts/{id}/indexes/sd/{ms}`, 5 s buckets, Coil-cached) above the thumb + timestamp; text-only bubble when the part has no `indexes` attribute |
 | Double-tap center | Toggle controls (a11y parity) | — |
 | **Pinch/spread on video** | **Realtime zoom** (1×–4×) | Video scales about the pinch midpoint; controls unaffected |

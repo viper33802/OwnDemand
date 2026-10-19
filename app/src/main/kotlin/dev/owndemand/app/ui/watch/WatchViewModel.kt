@@ -3,6 +3,7 @@ package dev.owndemand.app.ui.watch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.owndemand.app.AppContainer
+import dev.owndemand.app.data.replaceItem
 import dev.owndemand.app.data.plex.dto.ItemDto
 import dev.owndemand.app.playback.PlaybackManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,14 @@ class WatchViewModel(
 
     init {
         load()
+        // Keep Up next current when a video elsewhere finishes or is left.
+        viewModelScope.launch {
+            container.libraryIndex.updates.collect { fresh ->
+                val list = _upNext.value
+                val patched = replaceItem(list, fresh)
+                if (patched !== list) _upNext.value = patched
+            }
+        }
     }
 
     private fun load() {

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
@@ -27,8 +28,12 @@ data class HomeUiState(
     val loading: Boolean = false,
     val error: String? = null,
     val sort: HomeSort = HomeSort.Mixed,
+    /** Pull-to-refresh in progress (the current feed stays on screen). */
+    val refreshing: Boolean = false,
     /** The index list the feed was last built from (identity-compared). */
     val indexItems: List<ItemDto>? = null,
+    /** The index's full-load generation the feed was last rebuilt for. */
+    val indexGeneration: Int = -1,
 )
 
 /**
@@ -55,10 +60,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             // sampling loading.value on an items emission left the
             // progress row up forever.
             val index = container.libraryIndex
-            libraryIndexSnapshots(index.items, index.loading, index.error).collect { snapshot ->
+            libraryIndexSnapshots(
+                index.items, index.loading, index.error, index.generation, index.refreshing,
+            ).collect { snapshot ->
                 _state.value = _state.value.withIndex(snapshot, sessionSeed)
             }
         }
+    }
+
+    /** Pull-to-refresh: reload the library, keeping the current feed shown. */
+    fun refresh() {
+        viewModelScope.launch { container.libraryIndex.refresh(container) }
     }
 
     fun retry() {
@@ -88,25 +100,69 @@ data class LibraryIndexSnapshot(
     val items: List<ItemDto>?,
     val loading: Boolean,
     val error: String?,
+    /** Full-load generation; a change means "rebuild", same means "patch". */
+    val generation: Int = 0,
+    val refreshing: Boolean = false,
 )
 
-/** The index's items, loading and error flows as one stream. */
+/** The index's published state as one stream. */
 fun libraryIndexSnapshots(
     items: Flow<List<ItemDto>?>,
     loading: Flow<Boolean>,
     error: Flow<String?>,
-): Flow<LibraryIndexSnapshot> = combine(items, loading, error, ::LibraryIndexSnapshot)
+    generation: Flow<Int> = flowOf(0),
+    refreshing: Flow<Boolean> = flowOf(false),
+): Flow<LibraryIndexSnapshot> = combine(items, loading, error, generation, refreshing, ::LibraryIndexSnapshot)
 
-/** Applies an index snapshot; the feed is rebuilt only when the items change. */
+/**
+ * Applies an index snapshot. A new full load (first load, pull-to-refresh)
+ * rebuilds the feed; a single-video update (same generation, new list) is
+ * patched in place so the cards the user is looking at do not reshuffle.
+ */
 fun HomeUiState.withIndex(snapshot: LibraryIndexSnapshot, seed: Int): HomeUiState {
     val items = snapshot.items
-    val base = if (items != null && items !== indexItems) rebuilt(items, seed) else this
+    val base = when {
+        items == null -> this
+        indexItems == null || snapshot.generation != indexGeneration -> rebuilt(items, seed)
+        items !== indexItems -> patched(items)
+        else -> this
+    }
     return base.copy(
         loading = snapshot.loading,
         error = snapshot.error,
+        refreshing = snapshot.refreshing,
         totalSize = items?.size ?: 0,
         indexItems = items,
+        indexGeneration = if (items != null) snapshot.generation else indexGeneration,
     )
+}
+
+/**
+ * Patches the current feed and Continue-watching row with fresher copies
+ * of their videos, keeping their order: a video that is now watched leaves
+ * the (unwatched-only) feed; Continue watching updates progress, drops
+ * videos that are no longer part-watched and puts newly part-watched ones
+ * first.
+ */
+fun HomeUiState.patched(all: List<ItemDto>, limit: Int = 15): HomeUiState {
+    val byKey = all.associateBy { it.ratingKey }
+    val newFeed = feed.mapNotNull { old ->
+        val fresh = byKey[old.ratingKey] ?: old
+        fresh.takeIf { it.viewCount == 0 }
+    }
+    val kept = continueWatching.mapNotNull { old ->
+        (byKey[old.ratingKey] ?: old).takeIf { it.isPartiallyWatched }
+    }
+    val keptKeys = kept.mapTo(HashSet()) { it.ratingKey }
+    val shownBefore = continueWatching.mapTo(HashSet()) { it.ratingKey }
+    val before = indexItems.orEmpty().associateBy { it.ratingKey }
+    // Only videos that *became* part-watched join (not ones the seeded
+    // pick left out), so the row does not grow on unrelated updates.
+    val joined = all.filter {
+        it.isPartiallyWatched && it.ratingKey !in keptKeys && it.ratingKey !in shownBefore &&
+            before[it.ratingKey]?.isPartiallyWatched == false
+    }
+    return copy(feed = newFeed, continueWatching = (joined + kept).take(limit))
 }
 
 /** Recomputes the feed and Continue-watching row for the current sort. */

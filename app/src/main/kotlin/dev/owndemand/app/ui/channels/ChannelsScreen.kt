@@ -63,6 +63,7 @@ import dev.owndemand.app.ui.LocalLayoutMode
 import dev.owndemand.app.ui.browseColumns
 import dev.owndemand.app.ui.browse.HomeSort
 import dev.owndemand.app.ui.browse.FeedCard
+import dev.owndemand.app.ui.browse.RefreshableBox
 import dev.owndemand.app.ui.containerViewModel
 import dev.owndemand.app.ui.detailPaneColumns
 import dev.owndemand.app.ui.isTablet
@@ -237,7 +238,13 @@ private fun TwoPaneChannels(
                 )
             } else {
                 // No back affordance here — the rail is the way back.
-                ChannelDetailScreen(channel = channel, onBack = null, onPlay = onPlay)
+                // Pulling the channel also refreshes the rail beside it.
+                ChannelDetailScreen(
+                    channel = channel,
+                    onBack = null,
+                    onPlay = onPlay,
+                    onRefreshChannels = vm::refresh,
+                )
             }
         }
     }
@@ -299,6 +306,8 @@ fun ChannelDetailScreen(
     channel: CollectionDto,
     onBack: (() -> Unit)?,
     onPlay: (String) -> Unit,
+    /** Tablet two-pane: also reload the channel rail on pull-to-refresh. */
+    onRefreshChannels: (() -> Unit)? = null,
 ) {
     BackHandler(enabled = onBack != null) { onBack?.invoke() }
     val container = LocalAppContainer.current
@@ -344,8 +353,11 @@ fun ChannelDetailScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // The loaded list is fresher than the collection's count
+                // once the page (or a pull-to-refresh) has loaded.
+                val count = if (state.items.isNotEmpty()) state.items.size else channel.childCount
                 Text(
-                    "${channel.childCount} video${if (channel.childCount == 1) "" else "s"}",
+                    "$count video${if (count == 1) "" else "s"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -374,6 +386,13 @@ fun ChannelDetailScreen(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val columns = detailPaneColumns(maxWidth)
             val gutter = if (columns > 1) 12.dp else 0.dp
+            RefreshableBox(
+                refreshing = state.refreshing,
+                onRefresh = {
+                    vm.refresh()
+                    onRefreshChannels?.invoke()
+                },
+            ) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize(),
@@ -406,6 +425,7 @@ fun ChannelDetailScreen(
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Spacer(Modifier.height(80.dp))
+            }
             }
             }
         }

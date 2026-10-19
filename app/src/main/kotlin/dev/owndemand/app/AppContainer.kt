@@ -13,6 +13,7 @@ import dev.owndemand.app.playback.PlaybackManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -76,8 +77,16 @@ class AppContainer(context: Context) {
 
     fun playbackManager(): PlaybackManager {
         playbackManager?.let { return it }
-        return PlaybackManager(appContext, repository(), lazyClientId, appScope)
-            .also { playbackManager = it }
+        val repo = repository()
+        return PlaybackManager(
+            appContext,
+            repo,
+            lazyClientId,
+            appScope,
+            // A video finished / was left: re-read it so watched chips,
+            // Continue watching and resume offsets reflect the server.
+            onItemSettled = { key -> appScope.launch { libraryIndex.refreshItem(repo, key) } },
+        ).also { playbackManager = it }
     }
 
     /** Releases the player (sign-out / server change); recreate afterwards. */

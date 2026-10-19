@@ -34,6 +34,12 @@ class PlaybackManager(
     private val repository: PlexRepository,
     clientIdentifier: String,
     private val scope: CoroutineScope,
+    /**
+     * Called with a video's ratingKey once its final report has reached
+     * the server — it finished, was stopped, or another video replaced
+     * it — so the app can re-read its watched state / resume offset.
+     */
+    private val onItemSettled: (String) -> Unit = {},
 ) {
     companion object {
         private const val TIMELINE_INTERVAL_MS = 10_000L
@@ -68,6 +74,13 @@ class PlaybackManager(
                 addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _isPlaying.value = isPlaying
+                        // A user pause (playWhenReady off while ready) saves
+                        // the position now rather than up to one timeline
+                        // interval later. Item switches keep playWhenReady on,
+                        // so they never report the new item at position 0.
+                        if (!isPlaying && !playWhenReady && playbackState == Player.STATE_READY) {
+                            report("paused")
+                        }
                         if (isPlaying) {
                             // Playback resumed → recovery worked (or a
                             // fresh start); clear the retry budget.
@@ -155,13 +168,22 @@ class PlaybackManager(
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _isBuffering.value = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_ENDED) finishCurrent()
             }
         })
     }
 
     val currentRatingKey: String? get() = _currentItem.value?.ratingKey
 
+    /** The ratingKey whose end-of-video handling already ran (once per playback). */
+    private var endHandledKey: String? = null
+
     fun play(item: ItemDto) {
+        // Switching away from another video: save where it was left.
+        _currentItem.value?.let { previous ->
+            if (previous.ratingKey != item.ratingKey) settleAfter(previous.ratingKey, report("stopped"))
+        }
+        endHandledKey = null
         _currentItem.value = item
         _error.value = null
         _reconnecting.value = false
@@ -266,9 +288,35 @@ class PlaybackManager(
         }
     }
 
+    /**
+     * The video reached its end: a final report at full length, then an
+     * explicit "watched" (Plex otherwise relies on its 90 % threshold and the
+     * last periodic report can land several seconds before the end).
+     */
+    private fun finishCurrent() {
+        val item = _currentItem.value ?: return
+        if (endHandledKey == item.ratingKey) return
+        endHandledKey = item.ratingKey
+        val duration = if (player.duration > 0) player.duration else item.duration
+        val reported = report("stopped", timeMs = duration)
+        scope.launch {
+            reported?.join()
+            repository.scrobble(item.ratingKey)
+            onItemSettled(item.ratingKey)
+        }
+    }
+
+    private fun settleAfter(ratingKey: String, reported: Job?) {
+        if (endHandledKey == ratingKey) return // finishCurrent already settled it
+        scope.launch {
+            reported?.join()
+            onItemSettled(ratingKey)
+        }
+    }
+
     /** Stop playback and report the position for resume. */
     fun stopAndReport() {
-        report("stopped")
+        _currentItem.value?.let { settleAfter(it.ratingKey, report("stopped")) }
         timelineJob?.cancel()
         retryJob?.cancel()
         player.stop()
@@ -291,12 +339,18 @@ class PlaybackManager(
         }
     }
 
-    private fun report(state: String) {
-        val item = _currentItem.value ?: return
+    /**
+     * Reports [_currentItem]'s state. Positions are only read while the
+     * player really holds that item (media id = ratingKey), so a position
+     * can never be attributed to the wrong video mid-switch.
+     */
+    private fun report(state: String, timeMs: Long? = null): Job? {
+        val item = _currentItem.value ?: return null
         val ratingKey = item.ratingKey
-        val time = player.currentPosition.coerceAtLeast(0)
+        if (player.currentMediaItem?.mediaId != ratingKey) return null
+        val time = (timeMs ?: player.currentPosition).coerceAtLeast(0)
         val duration = if (player.duration > 0) player.duration else item.duration
-        scope.launch {
+        return scope.launch {
             repository.reportTimeline(ratingKey, state, time, duration)
         }
     }
