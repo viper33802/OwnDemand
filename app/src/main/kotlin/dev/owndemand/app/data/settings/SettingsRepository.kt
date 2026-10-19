@@ -55,6 +55,8 @@ class SettingsRepository(
         val SERVER_NAME = stringPreferencesKey("server_name")
         val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
         val SERVER_TOKEN = byteArrayPreferencesKey("server_token")
+        /** All HTTPS addresses, best first, newline-separated. */
+        val SERVER_CONNECTIONS = stringPreferencesKey("server_connections")
         val LIBRARY_KEY = stringPreferencesKey("library_key")
         val LIBRARY_UUID = stringPreferencesKey("library_uuid")
         val LIBRARY_TITLE = stringPreferencesKey("library_title")
@@ -94,6 +96,9 @@ class SettingsRepository(
         return store.data.first()[Keys.CLIENT_ID].orEmpty()
     }
 
+    /** The stored account token, or null when signed out. */
+    suspend fun currentAccountToken(): String? = settings.first().accountToken
+
     suspend fun setAccountToken(token: String) =
         store.edit { it[Keys.ACCOUNT_TOKEN] = tokenStore.encrypt(token) }
 
@@ -106,7 +111,27 @@ class SettingsRepository(
         prefs[Keys.SERVER_NAME] = server.name
         prefs[Keys.SERVER_BASE_URL] = server.baseUrl
         prefs[Keys.SERVER_TOKEN] = tokenStore.encrypt(server.accessToken)
+        prefs[Keys.SERVER_CONNECTIONS] = server.connections.joinToString("\n")
     }
+
+    /** Switches the address in use (one of the server's [PlexServer.connections]). */
+    suspend fun setServerAddress(baseUrl: String) = store.edit { prefs ->
+        if (baseUrl.startsWith("https://")) prefs[Keys.SERVER_BASE_URL] = baseUrl
+    }
+
+    /**
+     * Replaces the server's address list (and its access token, which Plex
+     * may rotate) after a fresh read from plex.tv; the address in use is kept
+     * unless it is no longer advertised.
+     */
+    suspend fun updateServerConnections(connections: List<String>, accessToken: String) =
+        store.edit { prefs ->
+            val https = connections.filter { it.startsWith("https://") }
+            if (https.isEmpty()) return@edit
+            prefs[Keys.SERVER_CONNECTIONS] = https.joinToString("\n")
+            if (prefs[Keys.SERVER_BASE_URL] !in https) prefs[Keys.SERVER_BASE_URL] = https.first()
+            if (accessToken.isNotBlank()) prefs[Keys.SERVER_TOKEN] = tokenStore.encrypt(accessToken)
+        }
 
     suspend fun setLibrary(library: PlexLibrary) = store.edit { prefs ->
         prefs[Keys.LIBRARY_KEY] = library.key
@@ -123,6 +148,7 @@ class SettingsRepository(
         prefs.remove(Keys.SERVER_NAME)
         prefs.remove(Keys.SERVER_BASE_URL)
         prefs.remove(Keys.SERVER_TOKEN)
+        prefs.remove(Keys.SERVER_CONNECTIONS)
         clearLibraryKeys(prefs)
     }
 
@@ -147,6 +173,7 @@ class SettingsRepository(
         prefs.remove(Keys.SERVER_NAME)
         prefs.remove(Keys.SERVER_BASE_URL)
         prefs.remove(Keys.SERVER_TOKEN)
+        prefs.remove(Keys.SERVER_CONNECTIONS)
         clearLibraryKeys(prefs)
     }
 
@@ -163,7 +190,9 @@ class SettingsRepository(
         // HTTPS only; a server saved by an older build over http must be re-picked.
         val baseUrl = prefs[Keys.SERVER_BASE_URL]?.takeIf { it.startsWith("https://") } ?: return null
         val token = prefs[Keys.SERVER_TOKEN]?.let { tokenStore.decrypt(it) } ?: return null
-        return PlexServer(machineId, name, baseUrl, token)
+        val connections = prefs[Keys.SERVER_CONNECTIONS].orEmpty()
+            .split('\n').filter { it.startsWith("https://") }
+        return PlexServer(machineId, name, baseUrl, token, connections)
     }
 
     private fun readLibrary(prefs: Preferences): PlexLibrary? {

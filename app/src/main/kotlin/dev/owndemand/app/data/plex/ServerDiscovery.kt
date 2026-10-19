@@ -13,15 +13,26 @@ object ServerDiscovery {
     /**
      * HTTPS only: the server token travels with every request, so plain-HTTP
      * connections are never used (the app also forbids cleartext at the
-     * platform level — see network_security_config.xml). Relay entries have
-     * no usable address:port and are dropped. Preference: local, then remote.
+     * platform level — see network_security_config.xml). Entries without a
+     * usable address:port are dropped. The best of [orderedConnections].
      */
     fun pickConnection(connections: List<ResourceConnection>): ResourceConnection? =
+        orderedConnections(connections).firstOrNull()
+
+    /**
+     * All usable HTTPS connections, best first: home network, then remote,
+     * then Plex relay (slow — last resort). Away from home the home
+     * addresses are unreachable, so the app falls back down this list.
+     */
+    fun orderedConnections(connections: List<ResourceConnection>): List<ResourceConnection> =
         connections
             .filter { it.address.isNotBlank() && it.port > 0 }
             .filter { connectionBaseUrl(it).startsWith("https://") }
-            .sortedByDescending { it.local }
-            .firstOrNull()
+            .sortedWith(compareBy({ it.relay }, { !it.local }))
+
+    /** [orderedConnections] as base URLs, duplicates removed. */
+    fun orderedBaseUrls(connections: List<ResourceConnection>): List<String> =
+        orderedConnections(connections).map(::connectionBaseUrl).distinct()
 
     /**
      * Base URL for a connection: Plex's own `uri` when present (its
@@ -38,12 +49,14 @@ object ServerDiscovery {
         devices
             .filter { it.owned && it.provides.split(',').contains("server") }
             .mapNotNull { device ->
-                val connection = pickConnection(device.connections) ?: return@mapNotNull null
+                val urls = orderedBaseUrls(device.connections)
+                if (urls.isEmpty()) return@mapNotNull null
                 PlexServer(
                     machineIdentifier = device.clientIdentifier,
                     name = device.name,
-                    baseUrl = connectionBaseUrl(connection),
+                    baseUrl = urls.first(),
                     accessToken = device.accessToken ?: "",
+                    connections = urls,
                 )
             }
 

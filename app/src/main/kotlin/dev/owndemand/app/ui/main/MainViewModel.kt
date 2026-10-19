@@ -94,6 +94,16 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 runCatching { container.playbackManager().dataSaver = s.dataSaver }
             }
         }
+        // Server address: confirm it answers, then refresh the address list
+        // from plex.tv (installs predating the list stored only one address;
+        // home internet addresses change) and re-confirm against it.
+        viewModelScope.launch {
+            val s = container.settingsRepository.settings.first { it.server != null }
+            if (container.currentServer == null) container.currentServer = s.server
+            container.recheckConnection()
+            container.connections.refreshFromPlexTv()
+            container.recheckConnection()
+        }
         // Installs predating the username capture: fetch it once, best-effort.
         viewModelScope.launch {
             val s = container.settingsRepository.settings.first()
