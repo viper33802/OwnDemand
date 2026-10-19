@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,8 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.owndemand.app.data.settings.AppSettings
 import dev.owndemand.app.ui.readableWidth
 
@@ -47,6 +52,7 @@ fun SettingsSheet(
     onFontScaleChange: (Float) -> Unit,
 ) {
     var detailsOpen by remember { mutableStateOf(false) }
+    var licensesOpen by remember { mutableStateOf(false) }
     Column(
         // readableWidth: at tablet widths the whole page becomes a centred
         // 640 dp column (survey A5); phones are untouched.
@@ -158,6 +164,63 @@ fun SettingsSheet(
                 mono = true,
             )
             SettingRow("Signed in", if (settings.isSignedIn) "yes" else "no")
+        }
+
+        TextButton(onClick = { licensesOpen = true }) { Text("Open-source licences") }
+        val context = LocalContext.current
+        val version = remember {
+            runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull()
+        }
+        Text(
+            "OwnDemand ${version.orEmpty()}".trim(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+    }
+
+    if (licensesOpen) OpenSourceLicensesDialog(onDismiss = { licensesOpen = false })
+}
+
+/**
+ * NOTICE (copyright + bundled libraries) followed by the Apache 2.0 text,
+ * read from the APK's assets — Apache 2.0 §4 requires both to ship with
+ * the binary. LicenseAssetsTest keeps the assets in sync with the repo.
+ */
+@Composable
+private fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val text = remember {
+        listOf("NOTICE.txt", "LICENSE.txt").joinToString("\n\n") { name ->
+            runCatching {
+                context.assets.open("licenses/$name").bufferedReader().use { it.readText() }
+            }.getOrDefault("")
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(Modifier.fillMaxSize()) {
+            Column(Modifier.readableWidth().padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Open-source licences",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
         }
     }
 }

@@ -12,6 +12,7 @@
   <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4F46E5?logo=jetpackcompose&logoColor=white">
   <img alt="Media3 ExoPlayer" src="https://img.shields.io/badge/Media3-ExoPlayer-24104F">
   <img alt="Plex" src="https://img.shields.io/badge/Plex-Media%20Server-24104F?logo=plex&logoColor=white">
+  <a href="LICENSE"><img alt="Licence: Apache 2.0" src="https://img.shields.io/badge/licence-Apache%202.0-A78BFA"></a>
 </p>
 
 OwnDemand is an Android app for browsing and watching the channel videos
@@ -76,7 +77,21 @@ source of truth; OwnDemand never downloads, moves or edits media.
   OwnDemand connects over HTTPS only.
 - A Plex library of videos organised into Collections (one per channel).
 
-## Build & install
+## Install
+
+1. Download `OwnDemand-<version>.apk` from the
+   [latest release](https://github.com/viper33802/OwnDemand/releases/latest).
+2. Open it on your Android device. The first time, Android asks you to allow
+   *Install unknown apps* for your browser or file manager — allow it, then
+   tap **Install**.
+3. Open OwnDemand, sign in with Plex (it opens plex.tv in your browser to
+   approve a short code), pick your server, then pick the video library.
+
+Updates install over the previous version as long as they come from these
+releases (they are all signed with the same key). Each release lists the
+APK's SHA-256 checksum if you want to verify the download.
+
+## Build from source
 
 Requires JDK 21 and the Android SDK.
 
@@ -86,8 +101,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ./gradlew testDebugUnitTest      # JVM unit tests
 ```
 
-Open the app, sign in with Plex (it opens plex.tv in your browser to
-approve a short code), pick your server, then pick the video library.
+A debug build is signed with your local debug key, so it cannot update an
+installed release build (uninstall one before installing the other).
+`./gradlew assembleRelease` produces an unsigned release APK unless you
+configure your own signing key — see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Security & privacy
 
@@ -187,11 +204,18 @@ The token lives only in `~youruser/.owndemand-scan-token` (mode `600`).
 Uploaded artwork replaces the auto-collage and stays until you re-pick the
 collage in the Plex Web UI (collection → Edit → Posters).
 
-## Status
+## Licence
 
-Active development; see [`docs/`](docs/) for design and verification notes
-and [`AGENTS.md`](AGENTS.md) for contributor guidelines. The project has
-not yet been published under a licence.
+OwnDemand is licensed under the [Apache License, Version 2.0](LICENSE).
+See [`NOTICE`](NOTICE) for the copyright notice and the third-party
+libraries the app includes; the app shows both under
+*Settings → Open-source licences*.
 
-OwnDemand is an independent project, not affiliated with or endorsed by
-Plex, Inc. Plex is a trademark of Plex, Inc.
+The OwnDemand name and logo are not covered by the licence. OwnDemand is an
+independent project, not affiliated with or endorsed by Plex, Inc. Plex is a
+trademark of Plex, Inc.
+
+## Contributing
+
+See [`AGENTS.md`](AGENTS.md) for project guidelines and [`docs/`](docs/) for
+design and verification notes. Bug reports and pull requests are welcome.

@@ -109,6 +109,8 @@ Tablet layouts are described in `docs/TABLET-PLAN.md`; player anatomy in
 - Manual dependency container (`AppContainer`) — no DI framework.
 - Avoid unnecessary modules, dependencies, abstractions, or databases. If a
   database ever becomes necessary, document its purpose and contents.
+- New dependencies must have an Apache-2.0-compatible licence and be added
+  to `NOTICE` (and its bundled asset copy, see `docs/RELEASING.md`).
 
 ---
 
@@ -177,6 +179,6 @@ Feature-complete proof of concept for phones and tablets: connection and
 sign-in, library selection, home feed, channels, watch/playback with
 miniplayer, search, settings, captions, and scrub previews.
 
-Next: public-release preparation (licence selection, dependency licence
-review, release packaging). Google Play distribution is a possible later
-phase, not a current goal.
+Licensed under Apache 2.0 (`LICENSE`, `NOTICE`). Releases are signed APKs
+published as GitHub Release assets; the process is in `docs/RELEASING.md`.
+Google Play distribution is a possible later phase, not a current goal.

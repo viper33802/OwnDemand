@@ -1,0 +1,35 @@
+OwnDemand
+Copyright 2026 viper33802
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this software except in compliance with the License. A copy of the
+License is in the LICENSE file and at http://www.apache.org/licenses/LICENSE-2.0
+
+The "OwnDemand" name and logo are not covered by the License (see section 6
+of the License). OwnDemand is an independent project, not affiliated with or
+endorsed by Plex, Inc.; Plex is a trademark of Plex, Inc.
+
+------------------------------------------------------------------------------
+Third-party software
+
+The OwnDemand app includes the following open-source libraries, each
+distributed under the Apache License, Version 2.0:
+
+- AndroidX (Activity, AppCompat, Core, Lifecycle, Navigation, DataStore,
+  Compose UI / Foundation / Material 3, Window and related libraries)
+  Copyright The Android Open Source Project
+- AndroidX Media3 / ExoPlayer
+  Copyright The Android Open Source Project
+- Kotlin standard library, kotlinx.coroutines, kotlinx.serialization,
+  JetBrains Compose Multiplatform runtime libraries
+  Copyright JetBrains s.r.o. and Kotlin Programming Language contributors
+- Coil (image loading)
+  Copyright Coil Contributors
+- OkHttp and Okio
+  Copyright Square, Inc.
+- Guava
+  Copyright The Guava Authors
+- Accompanist
+  Copyright The Android Open Source Project
+- JSpecify annotations
+  Copyright The JSpecify Authors

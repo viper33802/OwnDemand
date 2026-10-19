@@ -17,6 +17,26 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release signing reads its keystore from Gradle properties kept OUTSIDE
+    // the repo (e.g. ~/.gradle/gradle.properties):
+    //   owndemand.release.storeFile=/absolute/path/to/owndemand-release.jks
+    //   owndemand.release.storePassword=…
+    //   owndemand.release.keyAlias=owndemand
+    //   owndemand.release.keyPassword=…
+    // Without them the release build is produced unsigned, so anyone can
+    // still build from source.
+    val releaseStoreFile = providers.gradleProperty("owndemand.release.storeFile").orNull
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = providers.gradleProperty("owndemand.release.storePassword").get()
+                keyAlias = providers.gradleProperty("owndemand.release.keyAlias").get()
+                keyPassword = providers.gradleProperty("owndemand.release.keyPassword").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -25,8 +45,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Signing config for release builds is added in the release-readiness
-            // milestone; debug builds are used throughout development.
+            if (releaseStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
