@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -130,8 +131,10 @@ fun VideoPlayer(
     }
 
     // Auto-hide controls 3 s after last interaction (never while paused).
-    LaunchedEffect(controlsVisible, isPlaying, scrubbing, interactionTick) {
-        if (controlsVisible && isPlaying && !scrubbing) {
+    // An open speed / quality / captions menu keeps the controls up.
+    var controlMenuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(controlsVisible, isPlaying, scrubbing, interactionTick, controlMenuOpen) {
+        if (controlsVisible && isPlaying && !scrubbing && !controlMenuOpen) {
             kotlinx.coroutines.delay(3_000)
             controlsVisible = false
         }
@@ -373,6 +376,7 @@ fun VideoPlayer(
             PlayerControls(
                 manager = manager,
                 title = title,
+                onMenuOpenChange = { controlMenuOpen = it },
                 isPlaying = isPlaying,
                 positionMs = if (scrubbing) scrubPositionMs else positionMs,
                 scrubbing = scrubbing,
@@ -427,6 +431,7 @@ private fun PlayerSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
 private fun PlayerControls(
     manager: PlaybackManager,
     title: String,
+    onMenuOpenChange: (Boolean) -> Unit,
     isPlaying: Boolean,
     positionMs: Long,
     scrubbing: Boolean,
@@ -488,8 +493,9 @@ private fun PlayerControls(
                 )
                 // Speed picker (M6): shows the current rate, opens the
                 // Reference-app rate list.
-                SpeedControl(manager)
-                CaptionsControl(manager, hasSubtitles, captionsOn)
+                SpeedControl(manager, onMenuOpenChange)
+                QualityControl(manager, onMenuOpenChange)
+                CaptionsControl(manager, hasSubtitles, captionsOn, onMenuOpenChange)
             }
         }
 
@@ -629,9 +635,10 @@ fun speedLabel(factor: Float): String =
 
 /** Top-row speed button + rate menu (M6). */
 @Composable
-private fun SpeedControl(manager: PlaybackManager) {
+private fun SpeedControl(manager: PlaybackManager, onMenuOpenChange: (Boolean) -> Unit) {
     val speed by manager.speed.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(menuOpen) { onMenuOpenChange(menuOpen) }
     Box {
         IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(44.dp)) {
             Text(
@@ -659,6 +666,57 @@ private fun SpeedControl(manager: PlaybackManager) {
         }
     }
 }
+
+/**
+ * Quality for this video (Chunk 3 follow-up): "Auto" follows the Settings
+ * cap for the current network; a choice applies to this video only.
+ */
+@Composable
+private fun QualityControl(manager: PlaybackManager, onMenuOpenChange: (Boolean) -> Unit) {
+    val override by manager.qualityOverride.collectAsStateWithLifecycle()
+    val settingsCap by manager.settingsQuality.collectAsStateWithLifecycle()
+    var menuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(menuOpen) { onMenuOpenChange(menuOpen) }
+    Box {
+        IconButton(onClick = { menuOpen = true }, modifier = Modifier.height(44.dp).widthIn(min = 44.dp)) {
+            Text(
+                playerQualityLabel(override),
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            )
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        "Auto (${settingsCap.label})",
+                        color = if (override == null) Color(0xFFA78BFA) else Color.White,
+                    )
+                },
+                onClick = {
+                    manager.setQualityOverride(null)
+                    menuOpen = false
+                },
+            )
+            dev.owndemand.app.domain.VideoQuality.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(option.label, color = if (option == override) Color(0xFFA78BFA) else Color.White)
+                    },
+                    onClick = {
+                        manager.setQualityOverride(option)
+                        menuOpen = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Player button text: "Auto" when following Settings, else the chosen cap. */
+fun playerQualityLabel(override: dev.owndemand.app.domain.VideoQuality?): String =
+    override?.shortLabel ?: "Auto"
 
 /** Thin track, red played accent, buffered grey, wide touch band, drag thumb. */
 private val ScrubBandHeight = 56.dp
@@ -852,13 +910,19 @@ private fun SpeedChip() {
  * language, and an Audio section when the video has several audio tracks.
  */
 @Composable
-private fun CaptionsControl(manager: PlaybackManager, hasSubtitles: Boolean, captionsOn: Boolean) {
+private fun CaptionsControl(
+    manager: PlaybackManager,
+    hasSubtitles: Boolean,
+    captionsOn: Boolean,
+    onMenuOpenChange: (Boolean) -> Unit,
+) {
     val tracks by manager.tracks.collectAsStateWithLifecycle()
     val textOptions = remember(tracks) { trackOptions(tracks, androidx.media3.common.C.TRACK_TYPE_TEXT) }
     val audioOptions = remember(tracks) { trackOptions(tracks, androidx.media3.common.C.TRACK_TYPE_AUDIO) }
     if (!hasSubtitles && textOptions.isEmpty() && audioOptions.size <= 1) return
     val simple = textOptions.size <= 1 && audioOptions.size <= 1
     var open by remember { mutableStateOf(false) }
+    LaunchedEffect(open) { onMenuOpenChange(open) }
     Box {
         IconButton(
             onClick = { if (simple) manager.toggleCaptions() else open = true },

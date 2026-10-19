@@ -61,24 +61,48 @@ class PlaybackManager(
         private val RETRY_BACKOFF_MS = longArrayOf(1_000, 2_000, 4_000, 8_000)
     }
 
-    /** Maximum quality for the current network (Wi-Fi or mobile setting). */
-    @Volatile
-    var quality: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Original
-        private set
+    private val _settingsQuality = MutableStateFlow(dev.owndemand.app.domain.VideoQuality.Original)
+
+    /** The Settings cap for the current network (Wi-Fi or mobile data). */
+    val settingsQuality: StateFlow<dev.owndemand.app.domain.VideoQuality> = _settingsQuality.asStateFlow()
+
+    private val _qualityOverride = MutableStateFlow<dev.owndemand.app.domain.VideoQuality?>(null)
 
     /**
-     * Applies a new cap (setting changed, or Wi-Fi <-> mobile data). The
-     * playing video switches streams at the same position, but only when
-     * the cap actually changes what is played.
+     * The in-player quality choice for the current video; null = "Auto"
+     * (follow Settings). Cleared whenever a different video starts.
      */
+    val qualityOverride: StateFlow<dev.owndemand.app.domain.VideoQuality?> = _qualityOverride.asStateFlow()
+
+    /** The cap in force now: the in-player choice, else the Settings cap. */
+    val quality: dev.owndemand.app.domain.VideoQuality
+        get() = effectiveQuality(_qualityOverride.value, _settingsQuality.value)
+
+    /** Settings cap changed (setting edited, or Wi-Fi <-> mobile data). */
     fun setQuality(newQuality: dev.owndemand.app.domain.VideoQuality) {
-        if (newQuality == quality) return
-        val old = quality
-        quality = newQuality
+        val before = quality
+        _settingsQuality.value = newQuality
+        switchStreamIfNeeded(before)
+    }
+
+    /** Player quality menu: a cap for this video only, or null for Auto. */
+    fun setQualityOverride(choice: dev.owndemand.app.domain.VideoQuality?) {
+        val before = quality
+        _qualityOverride.value = choice
+        switchStreamIfNeeded(before)
+    }
+
+    /**
+     * Restarts the playing video at the same position when the cap in force
+     * changed what is played (direct file vs conversion, or another cap).
+     */
+    private fun switchStreamIfNeeded(before: dev.owndemand.app.domain.VideoQuality) {
+        val now = quality
+        if (now == before) return
         val item = _currentItem.value ?: return
         if (player.currentMediaItem == null) return
         val repo = repository
-        if (repo.streamUri(item, old) != repo.streamUri(item, newQuality)) onAddressChanged()
+        if (repo.streamUri(item, before) != repo.streamUri(item, now)) onAddressChanged()
     }
 
     // PMS returns 400 for the transcode endpoints unless the standard
@@ -226,6 +250,9 @@ class PlaybackManager(
     private var endHandledKey: String? = null
 
     fun play(item: ItemDto) {
+        // The in-player quality choice is per video: a different video
+        // starts on the Settings cap again.
+        if (_currentItem.value?.ratingKey != item.ratingKey) _qualityOverride.value = null
         // Switching away from another video: save where it was left.
         _currentItem.value?.let { previous ->
             if (previous.ratingKey != item.ratingKey) settleAfter(previous.ratingKey, report("stopped"))
@@ -471,3 +498,9 @@ class PlaybackManager(
         }
     }
 }
+
+/** The cap in force: an in-player choice wins over the Settings cap. */
+fun effectiveQuality(
+    override: dev.owndemand.app.domain.VideoQuality?,
+    settings: dev.owndemand.app.domain.VideoQuality,
+): dev.owndemand.app.domain.VideoQuality = override ?: settings
