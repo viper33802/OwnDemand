@@ -34,6 +34,8 @@ data class HomeUiState(
     val indexItems: List<ItemDto>? = null,
     /** The index's full-load generation the feed was last rebuilt for. */
     val indexGeneration: Int = -1,
+    /** Videos removed from Continue watching (see AppSettings.hiddenContinue). */
+    val hiddenContinue: Map<String, Long> = emptyMap(),
 )
 
 /**
@@ -64,6 +66,19 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 index.items, index.loading, index.error, index.generation, index.refreshing,
             ).collect { snapshot ->
                 _state.value = _state.value.withIndex(snapshot, sessionSeed)
+            }
+        }
+        // Removing a video from Continue watching updates the row at once.
+        viewModelScope.launch {
+            container.settingsRepository.settings.collect { s ->
+                val st = _state.value
+                if (s.hiddenContinue == st.hiddenContinue) return@collect
+                _state.value = st.copy(
+                    hiddenContinue = s.hiddenContinue,
+                    continueWatching = st.indexItems
+                        ?.let { continueWatchingFor(it, s.hiddenContinue, CONTINUE_ROW_LIMIT) }
+                        ?: st.continueWatching,
+                )
             }
         }
     }
@@ -138,31 +153,18 @@ fun HomeUiState.withIndex(snapshot: LibraryIndexSnapshot, seed: Int): HomeUiStat
 }
 
 /**
- * Patches the current feed and Continue-watching row with fresher copies
- * of their videos, keeping their order: a video that is now watched leaves
- * the (unwatched-only) feed; Continue watching updates progress, drops
- * videos that are no longer part-watched and puts newly part-watched ones
- * first.
+ * Patches the current feed with fresher copies of its videos, keeping its
+ * order (a video that is now watched leaves the unwatched-only feed), and
+ * recomputes Continue watching — most recently watched first, so the video
+ * just left moves to the front.
  */
-fun HomeUiState.patched(all: List<ItemDto>, limit: Int = 15): HomeUiState {
+fun HomeUiState.patched(all: List<ItemDto>, limit: Int = CONTINUE_ROW_LIMIT): HomeUiState {
     val byKey = all.associateBy { it.ratingKey }
     val newFeed = feed.mapNotNull { old ->
         val fresh = byKey[old.ratingKey] ?: old
         fresh.takeIf { it.viewCount == 0 }
     }
-    val kept = continueWatching.mapNotNull { old ->
-        (byKey[old.ratingKey] ?: old).takeIf { it.isPartiallyWatched }
-    }
-    val keptKeys = kept.mapTo(HashSet()) { it.ratingKey }
-    val shownBefore = continueWatching.mapTo(HashSet()) { it.ratingKey }
-    val before = indexItems.orEmpty().associateBy { it.ratingKey }
-    // Only videos that *became* part-watched join (not ones the seeded
-    // pick left out), so the row does not grow on unrelated updates.
-    val joined = all.filter {
-        it.isPartiallyWatched && it.ratingKey !in keptKeys && it.ratingKey !in shownBefore &&
-            before[it.ratingKey]?.isPartiallyWatched == false
-    }
-    return copy(feed = newFeed, continueWatching = (joined + kept).take(limit))
+    return copy(feed = newFeed, continueWatching = continueWatchingFor(all, hiddenContinue, limit))
 }
 
 /** Recomputes the feed and Continue-watching row for the current sort. */
@@ -170,21 +172,14 @@ fun HomeUiState.rebuilt(all: List<ItemDto>, seed: Int): HomeUiState = copy(
     // Home shows unwatched content only; resume-able videos live
     // in the Continue watching row (user direction 2026-10-16).
     feed = buildHomeFeed(unwatchedOnly(all), sort, seed),
-    continueWatching = buildContinueWatching(all, seed),
+    continueWatching = continueWatchingFor(all, hiddenContinue, CONTINUE_ROW_LIMIT),
 )
+
+/** Videos in the Home row; the Library tab shows them all. */
+const val CONTINUE_ROW_LIMIT = 15
 
 /** Never played at all — what the home feed is made of. */
 fun unwatchedOnly(items: List<ItemDto>): List<ItemDto> = items.filter { it.viewCount == 0 }
-
-/** Resume-able items in seeded random order (variety per session). */
-fun buildContinueWatching(
-    items: List<ItemDto>,
-    seed: Int,
-    limit: Int = 15,
-): List<ItemDto> =
-    items.filter { it.isPartiallyWatched }
-        .shuffled(Random(seed.toLong() * 101 + 53))
-        .take(limit)
 
 /**
  * Feed ordering. [Mixed] keeps the freshest [MIXED_HEAD] items on top,

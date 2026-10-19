@@ -123,6 +123,20 @@ class AppContainer(context: Context) {
         ).also { playbackManager = it }
     }
 
+    // ---- Video actions (long-press menu) ----
+
+    /** Marks a video watched on the server, then refreshes it everywhere. */
+    suspend fun markWatched(ratingKey: String) {
+        repository().scrobble(ratingKey)
+        libraryIndex.refreshItem(repository(), ratingKey)
+    }
+
+    /** Marks a video unwatched (clears progress), then refreshes it everywhere. */
+    suspend fun markUnwatched(ratingKey: String) {
+        repository().unscrobble(ratingKey)
+        libraryIndex.refreshItem(repository(), ratingKey)
+    }
+
     /** Releases the player (sign-out / server change); recreate afterwards. */
     fun releasePlayback() {
         playbackManager?.let { runCatching { it.player.release() } }

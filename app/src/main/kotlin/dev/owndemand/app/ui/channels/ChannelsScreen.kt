@@ -64,6 +64,7 @@ import dev.owndemand.app.ui.browseColumns
 import dev.owndemand.app.ui.browse.HomeSort
 import dev.owndemand.app.ui.browse.FeedCard
 import dev.owndemand.app.ui.browse.RefreshableBox
+import dev.owndemand.app.ui.browse.newCountByChannel
 import dev.owndemand.app.ui.containerViewModel
 import dev.owndemand.app.ui.detailPaneColumns
 import dev.owndemand.app.ui.isTablet
@@ -106,6 +107,7 @@ fun ChannelsScreen(
 
     val vm: ChannelsViewModel = containerViewModel { ChannelsViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val newCounts = rememberNewCounts(container)
     // T2: channels tile in a grid at tablet widths (survey A3), a single
     // column on phones with zero gutter — pixel-identical to before.
     val columns = LocalLayoutMode.current.browseColumns()
@@ -132,6 +134,7 @@ fun ChannelsScreen(
                 collection = collection,
                 artworkUrl = container.repository().artworkUrl(collection.thumb),
                 onClick = { onOpenChannel(collection) },
+                newCount = newCounts[collection.title] ?: 0,
             )
         }
         // Unkeyed on purpose (see HomeScreen): a keyed placeholder alone
@@ -172,6 +175,7 @@ private fun TwoPaneChannels(
 ) {
     val vm: ChannelsViewModel = containerViewModel { ChannelsViewModel(it) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val newCounts = rememberNewCounts(container)
     val listState = rememberLazyListState()
 
     LaunchedEffect(listState) {
@@ -204,6 +208,7 @@ private fun TwoPaneChannels(
                     selected = collection.ratingKey == openChannel?.ratingKey,
                     edgePadding = 12.dp,
                     onClick = { onOpenChannel(collection) },
+                    newCount = newCounts[collection.title] ?: 0,
                 )
             }
             if (state.loading) {
@@ -250,6 +255,14 @@ private fun TwoPaneChannels(
     }
 }
 
+/** "New" videos per channel title, from the in-memory library index. */
+@Composable
+private fun rememberNewCounts(container: AppContainer): Map<String, Int> {
+    LaunchedEffect(Unit) { container.libraryIndex.ensureLoaded(container) }
+    val items by container.libraryIndex.items.collectAsStateWithLifecycle()
+    return remember(items) { newCountByChannel(items.orEmpty(), System.currentTimeMillis() / 1000) }
+}
+
 /** One channel: round avatar, name, video count — a subscription row, not a poster. */
 @Composable
 private fun ChannelRow(
@@ -258,6 +271,8 @@ private fun ChannelRow(
     onClick: () -> Unit,
     selected: Boolean = false,
     edgePadding: Dp = 16.dp,
+    /** Videos in this channel that count as "New" (see isNewVideo). */
+    newCount: Int = 0,
 ) {
     Row(
         Modifier
@@ -291,6 +306,18 @@ private fun ChannelRow(
                 "${collection.childCount} video${if (collection.childCount == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (newCount > 0) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "$newCount new",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF4F46E5))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
             )
         }
     }
@@ -399,6 +426,23 @@ fun ChannelDetailScreen(
                 contentPadding = PaddingValues(horizontal = gutter),
                 horizontalArrangement = Arrangement.spacedBy(gutter),
             ) {
+            // Channel banner (Chunk 2): scrolls away with the list, so the
+            // pinned header keeps its room. Absent → nothing shown.
+            if (channel.art.isNotBlank()) {
+                item(key = "banner", span = { GridItemSpan(maxLineSpan) }) {
+                    AsyncImage(
+                        model = container.repository().artworkUrl(channel.art),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(4.5f)
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(if (columns > 1) 12.dp else 0.dp))
+                            .background(Color.DarkGray),
+                    )
+                }
+            }
             items(videos, key = { it.ratingKey }) { video ->
                 FeedCard(
                     item = video,

@@ -27,6 +27,11 @@ data class CollectionDto(
     val title: String = "",
     /** 2:3 composite artwork path (verified 200 image/jpeg). */
     val thumb: String = "",
+    /**
+     * Background art (the channel banner). Present when one was uploaded,
+     * e.g. by tools/plex-collection-art.sh; blank otherwise.
+     */
+    val art: String = "",
     val childCount: Int = 0,
     val addedAt: Long = 0,
 )

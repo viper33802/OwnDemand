@@ -22,6 +22,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import dev.owndemand.app.data.plex.dto.ItemDto
+import dev.owndemand.app.ui.common.LocalVideoMenu
+import dev.owndemand.app.ui.common.VideoActionsSheet
+import dev.owndemand.app.ui.library.LibraryScreen
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -42,9 +52,14 @@ import dev.owndemand.app.ui.watch.WatchScreen
 
 private data class Tab(val label: String, @DrawableRes val iconRes: Int)
 
+/** Tab indices (Home 0, Channels 1). */
+const val LIBRARY_TAB = 2
+const val SETTINGS_TAB = 3
+
 private val tabs = listOf(
     Tab("Home", R.drawable.ic_tab_home),
     Tab("Channels", R.drawable.ic_tab_channel),
+    Tab("Library", R.drawable.ic_tab_library),
     Tab("Settings", R.drawable.ic_settings),
 )
 
@@ -84,6 +99,26 @@ fun MainShell(
     val fullscreenNow = watchKey != null && watchFullscreen
     val useRail = LocalLayoutMode.current.useSideRail && !fullscreenNow
 
+    // One long-press menu for every video card in the app (Chunk 2).
+    var menuItem by remember { mutableStateOf<ItemDto?>(null) }
+    val menuScope = rememberCoroutineScope()
+    menuItem?.let { item ->
+        VideoActionsSheet(
+            item = item,
+            hiddenFromContinue = settings.hiddenContinue[item.ratingKey] == item.viewOffset,
+            onDismiss = { menuItem = null },
+            onMarkWatched = { menuScope.launch { container.markWatched(item.ratingKey) } },
+            onMarkUnwatched = { menuScope.launch { container.markUnwatched(item.ratingKey) } },
+            onRemoveFromContinue = {
+                menuScope.launch {
+                    container.settingsRepository.hideFromContinueWatching(item.ratingKey, item.viewOffset)
+                }
+            },
+            onGoToChannel = { item.channelName?.let(mainVm::openChannelByName) },
+        )
+    }
+
+    CompositionLocalProvider(LocalVideoMenu provides { item: ItemDto -> menuItem = item }) {
     Scaffold(
         bottomBar = {
             if (!fullscreenNow && !useRail) {
@@ -154,9 +189,9 @@ fun MainShell(
                     IconButton(onClick = mainVm::openSearch) {
                         Icon(painterResource(R.drawable.ic_tab_search), "Search")
                     }
-                    // Home + Channels lead; Settings is pinned to the
-                    // rail foot (Material side-rail convention).
-                    tabs.take(2).forEachIndexed { index, tab ->
+                    // Home, Channels and Library lead; Settings is pinned
+                    // to the rail foot (Material side-rail convention).
+                    tabs.take(SETTINGS_TAB).forEachIndexed { index, tab ->
                         NavigationRailItem(
                             selected = selectedTab == index && watchKey == null,
                             onClick = { mainVm.selectTab(index) },
@@ -171,15 +206,15 @@ fun MainShell(
                     }
                     Spacer(Modifier.weight(1f))
                     NavigationRailItem(
-                        selected = selectedTab == 2 && watchKey == null,
-                        onClick = { mainVm.selectTab(2) },
+                        selected = selectedTab == SETTINGS_TAB && watchKey == null,
+                        onClick = { mainVm.selectTab(SETTINGS_TAB) },
                         icon = {
                             Icon(
-                                painterResource(tabs[2].iconRes),
-                                tabs[2].label,
+                                painterResource(tabs[SETTINGS_TAB].iconRes),
+                                tabs[SETTINGS_TAB].label,
                             )
                         },
-                        label = { Text(tabs[2].label) },
+                        label = { Text(tabs[SETTINGS_TAB].label) },
                     )
                     Spacer(Modifier.height(6.dp))
                 }
@@ -196,6 +231,7 @@ fun MainShell(
         } else {
             content(contentModifier)
         }
+    }
     }
 }
 
@@ -236,6 +272,7 @@ private fun ShellContent(
                 container = container,
                 onPlay = mainVm::play,
                 onSearch = mainVm::openSearch,
+                onSeeAllContinue = { mainVm.selectTab(LIBRARY_TAB) },
             )
             1 -> ChannelsScreen(
                 container = container,
@@ -243,6 +280,7 @@ private fun ShellContent(
                 onOpenChannel = { mainVm.openChannel.value = it },
                 onPlay = mainVm::play,
             )
+            LIBRARY_TAB -> LibraryScreen(container = container, onPlay = mainVm::play)
             else -> SettingsSheet(
                 settings = settings,
                 onSignOut = mainVm::signOut,

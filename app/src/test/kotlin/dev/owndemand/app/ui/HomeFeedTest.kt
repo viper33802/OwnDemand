@@ -2,7 +2,7 @@ package dev.owndemand.app.ui
 
 import dev.owndemand.app.data.plex.dto.ItemDto
 import dev.owndemand.app.ui.browse.HomeSort
-import dev.owndemand.app.ui.browse.buildContinueWatching
+import dev.owndemand.app.ui.browse.continueWatchingFor
 import dev.owndemand.app.ui.browse.buildHomeFeed
 import dev.owndemand.app.ui.browse.unwatchedOnly
 import dev.owndemand.app.ui.search.searchChannels
@@ -55,24 +55,25 @@ class HomeFeedTest {
             item("d", viewOffset = 590_000, viewCount = 1), // near the end → not offered
             item("e", viewOffset = 10_000, viewCount = 1), // barely started → not offered
         )
-        val got = buildContinueWatching(items, seed = 3).map { it.ratingKey }.sorted()
-        assertEquals(listOf("a", "b"), got)
+        val got = continueWatchingFor(items, emptyMap()).map { it.ratingKey }
+        assertEquals(listOf("b", "a"), got) // most recently watched first
     }
 
     @Test
     fun `continue watching respects limit`() {
         val items = (1..30).map { item("k$it", viewOffset = 100_000, viewCount = 1) }
-        assertEquals(15, buildContinueWatching(items, seed = 3).size)
+        assertEquals(15, continueWatchingFor(items, emptyMap(), limit = 15).size)
     }
 
     @Test
-    fun `continue watching order is seeded random - stable per seed, varied across seeds`() {
-        val items = (1..30).map { item("k$it", viewOffset = 100_000, viewCount = 1) }
-        val a1 = buildContinueWatching(items, seed = 1).map { it.ratingKey }
-        val a2 = buildContinueWatching(items, seed = 1).map { it.ratingKey }
-        val b = buildContinueWatching(items, seed = 2).map { it.ratingKey }
-        assertEquals(a1, a2)
-        assertFalse(a1 == b)
+    fun `removed videos stay hidden until their progress moves on`() {
+        val items = listOf(
+            item("a", viewOffset = 300_000, viewCount = 1, lastViewedAt = 10),
+            item("b", viewOffset = 120_000, viewCount = 1, lastViewedAt = 99),
+        )
+        assertEquals(listOf("a"), continueWatchingFor(items, mapOf("b" to 120_000L)).map { it.ratingKey })
+        // Watched further after hiding -> back in the row.
+        assertEquals(listOf("b", "a"), continueWatchingFor(items, mapOf("b" to 60_000L)).map { it.ratingKey })
     }
 
     @Test

@@ -30,6 +30,11 @@ data class AppSettings(
     /** Text-size multiplier over the system font scale; 1 = as-is (user
      * direction 2026-10-16: some prefer larger, keep the default untouched). */
     val fontScale: Float = 1f,
+    /**
+     * Videos removed from Continue watching: ratingKey -> resume offset at
+     * the time. A video shows again once its progress moves on.
+     */
+    val hiddenContinue: Map<String, Long> = emptyMap(),
 ) {
     val isSignedIn: Boolean get() = accountToken != null
     val hasServer: Boolean get() = server != null
@@ -38,6 +43,9 @@ data class AppSettings(
 }
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("owndemand_settings")
+
+/** Hidden Continue-watching entries kept (oldest dropped beyond this). */
+private const val MAX_HIDDEN = 200
 
 /**
  * Persistent configuration. Tokens are stored only as Keystore-encrypted
@@ -64,6 +72,8 @@ class SettingsRepository(
         val DATA_SAVER = androidx.datastore.preferences.core.booleanPreferencesKey("data_saver")
         val ACCOUNT_USERNAME = stringPreferencesKey("account_username")
         val FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("font_scale")
+        /** "ratingKey:offsetMs" entries — see [AppSettings.hiddenContinue]. */
+        val HIDDEN_CONTINUE = androidx.datastore.preferences.core.stringSetPreferencesKey("hidden_continue_watching")
     }
 
     private val store = context.applicationContext.dataStore
@@ -83,6 +93,10 @@ class SettingsRepository(
                 dataSaver = prefs[Keys.DATA_SAVER] == true,
                 accountUsername = prefs[Keys.ACCOUNT_USERNAME],
                 fontScale = prefs[Keys.FONT_SCALE] ?: 1f,
+                hiddenContinue = prefs[Keys.HIDDEN_CONTINUE].orEmpty().mapNotNull { entry ->
+                    val key = entry.substringBefore(':')
+                    entry.substringAfter(':', "").toLongOrNull()?.let { key to it }
+                }.toMap(),
             )
         }
 
@@ -94,6 +108,14 @@ class SettingsRepository(
             }
         }
         return store.data.first()[Keys.CLIENT_ID].orEmpty()
+    }
+
+    /** Removes a video from Continue watching until its progress changes. */
+    suspend fun hideFromContinueWatching(ratingKey: String, viewOffsetMs: Long) = store.edit { prefs ->
+        val kept = prefs[Keys.HIDDEN_CONTINUE].orEmpty()
+            .filterNot { it.substringBefore(':') == ratingKey }
+            .takeLast(MAX_HIDDEN - 1)
+        prefs[Keys.HIDDEN_CONTINUE] = (kept + "$ratingKey:$viewOffsetMs").toSet()
     }
 
     /** The stored account token, or null when signed out. */
