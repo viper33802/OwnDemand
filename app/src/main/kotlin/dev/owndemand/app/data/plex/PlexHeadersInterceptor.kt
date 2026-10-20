@@ -13,7 +13,7 @@ import okhttp3.Response
 class PlexHeadersInterceptor(
     private val clientIdentifier: () -> String,
     private val product: String = "OwnDemand",
-    private val productVersion: String = "0.2.0",
+    private val productVersion: String = "0.3.0",
     private val deviceName: String,
     private val platformVersion: String,
 ) : Interceptor {
