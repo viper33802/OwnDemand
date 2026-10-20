@@ -22,6 +22,14 @@ class SessionRulesTest {
     }
 
     @Test
+    fun `previous is greyed only on the first video in its first 5 s`() {
+        assertEquals(false, previousAvailable(positionMs = 0, history = emptyList()))
+        assertEquals(false, previousAvailable(positionMs = 5_000, history = emptyList()))
+        assertEquals(true, previousAvailable(positionMs = 5_001, history = emptyList())) // restart
+        assertEquals(true, previousAvailable(positionMs = 0, history = listOf("a")))      // back a video
+    }
+
+    @Test
     fun `next is the first Up-next video not finished and not played this session`() {
         val library = listOf(item("1"), item("2", viewCount = 1), item("3"), item("4", viewOffset = 60_000), item("5"))
         assertEquals("3", pickNextVideo(library, currentKey = "1", played = setOf("1"))?.ratingKey)

@@ -124,6 +124,26 @@ Planned and built 2026-10-19 (user decisions in brackets). Ships as
   of queue. Emulator: each order, autoplay through two videos, next from
   the notification, end of queue, leaving the queue.
 
+### Also in this PR: previous / next in the player (planned and built 2026-10-19)
+
+- **Buttons:** the player's centre row (shown when you tap the video,
+  inline and fullscreen) becomes **previous · play/pause · next** instead
+  of −10 s · play/pause · +10 s. They do exactly what the notification's
+  buttons do, and use our own drawn icons.
+- **±10 s stays as a gesture:** double-tap the left or right side, with
+  the running total bubble ("+40s"), as now.
+- **Greyed out when there's nothing to do:**
+  - *Next* is greyed when nothing follows: the channel's last video, or
+    no unfinished Up-next video left.
+  - *Previous* is greyed only on the first video of the session in its
+    first 5 s (no earlier video, nothing to restart); otherwise it goes
+    back a video, or restarts after 5 s.
+- **Notification / lock screen / headset:** unchanged (always offer
+  previous and next; at the end of a channel next does nothing).
+- **Tests:** unit tests for when each button is available. Emulator:
+  inline and fullscreen, phone and tablet layouts, greyed states at the
+  start of a session and at the end of a channel.
+
 ## Not planned
 
 Chromecast and offline downloads (large; revisit separately if wanted).

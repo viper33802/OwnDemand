@@ -435,15 +435,25 @@ class PlaybackManager(
      * the channel being played, else the next Up-next video.
      */
     fun skipToNext() {
-        val current = _currentItem.value ?: return
-        _queue.value?.let { queue ->
-            // Once through: nothing after the channel's last video.
-            queueNextKey(queue, current.ratingKey)?.let { playByKey(it, fromHistory = false) }
-            return
-        }
+        peekNextKey()?.let { playByKey(it, fromHistory = false) }
+    }
+
+    /**
+     * What "next" would play: the channel's next video (null after its last
+     * one — once through), else the next Up-next video. Null = the player's
+     * next button is greyed.
+     */
+    fun peekNextKey(): String? {
+        val current = _currentItem.value ?: return null
+        _queue.value?.let { queue -> return queueNextKey(queue, current.ratingKey) }
         val played = history.toSet() + current.ratingKey
-        val next = pickNextVideo(nextCandidates(), current.ratingKey, played) ?: return
-        playByKey(next.ratingKey, fromHistory = false)
+        return pickNextVideo(nextCandidates(), current.ratingKey, played)?.ratingKey
+    }
+
+    /** Whether "previous" would do anything at [positionMs] (player button state). */
+    fun hasPrevious(positionMs: Long): Boolean {
+        val currentKey = _currentItem.value?.ratingKey ?: return false
+        return previousAvailable(positionMs, history.filter { it != currentKey })
     }
 
     /** "Previous": the video before this one, or the start of this one. */

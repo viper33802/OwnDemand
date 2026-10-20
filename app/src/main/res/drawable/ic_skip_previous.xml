@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Previous video: a bar against a reversed play triangle (drawn for OwnDemand). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF" android:pathData="M19,4.5 L8,12 L19,19.5 Z M4.5,4.5 L7.5,4.5 L7.5,19.5 L4.5,19.5 Z" />
+</vector>
