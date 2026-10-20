@@ -2,6 +2,8 @@ package dev.owndemand.app.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -46,6 +48,12 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
     // window recomposes screens in place — MainActivity declares
     // configChanges, so nothing restarts and playback survives.
     val layoutMode = currentLayoutMode()
+    // Picture-in-picture (Chunk 4): the small window shows the video only.
+    val inPip by container.inPip.collectAsStateWithLifecycle()
+    if (inPip && settings.hasLibrary) {
+        PipVideo(container.playbackManager().player)
+        return
+    }
     CompositionLocalProvider(
         LocalDensity provides
             Density(systemDensity.density, systemDensity.fontScale * fontScale),
@@ -66,5 +74,32 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
             // so the bottom menu stays visible while playing portrait.
             else -> MainShell(mainVm = mainVm)
         }
+    }
+}
+
+/**
+ * The picture-in-picture window: the playing video, letterboxed on black.
+ * A SurfaceView here (checked on the Tab S6): the system composites and
+ * scales it itself through PiP transitions. The in-app player keeps its
+ * TextureView for zoom / pan.
+ */
+@Composable
+private fun PipVideo(player: androidx.media3.exoplayer.ExoPlayer) {
+    androidx.compose.foundation.layout.Box(
+        androidx.compose.ui.Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black),
+    ) {
+        androidx.compose.ui.viewinterop.AndroidView(
+            modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+            factory = { ctx ->
+                android.view.LayoutInflater.from(ctx)
+                    .inflate(dev.owndemand.app.R.layout.player_surface_pip, null, false)
+                    as androidx.media3.ui.PlayerView
+            },
+            update = { it.player = player },
+            // Hand the player back cleanly when PiP ends.
+            onRelease = { it.player = null },
+        )
     }
 }

@@ -52,6 +52,7 @@ Times: `m:ss` under 1 h, `h:mm:ss` above.
 | **Upward drag on the inline player** | **Enter fullscreen** (same as the fullscreen button) | 35 % of the player height commits; ignored in fullscreen and while zoomed (user direction 2026-10-19) |
 | Horizontal drag on scrubber | Scrub | **BIF preview frame** (`/library/parts/{id}/indexes/sd/{ms}`, 5 s buckets, Coil-cached) above the thumb + timestamp; text-only bubble when the part has no `indexes` attribute |
 | Double-tap center | Toggle controls (a11y parity) | — |
+| **CC button** | Captions on/off; with several subtitle or audio tracks, a menu: Subtitles (Off + each language) and Audio | The chosen subtitle language carries over to the next video (Chunk 3) |
 | **Pinch/spread on video** | **Realtime zoom** (1×–4×) | Video scales about the pinch midpoint; controls unaffected |
 | **Two-finger drag while zoomed** | **Pan** the zoomed video | Translation clamped so the frame edges never show black |
 | **One-finger drag while zoomed** | Pan (convenience) | Same clamp |
@@ -149,3 +150,8 @@ OwnDemand plays first and keeps the app browsable.
   the channel is shown separately (`displayTitle`).
 - **Hard rule**: no vertical or short-form cards anywhere in the app.
   All thumbnails 16:9; vertical sources letterboxed inside 16:9.
+- **Autoplay next** (Chunk 3): when a video ends on the watch screen
+  (inline or fullscreen), an "Up next in 5" card with **Play now** and
+  **Cancel** sits at the player's lower right; at zero the first Up-next
+  video not yet finished opens (fullscreen stays fullscreen). One global
+  switch in Settings, on by default.

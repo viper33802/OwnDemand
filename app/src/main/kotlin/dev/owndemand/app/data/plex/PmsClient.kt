@@ -161,6 +161,27 @@ class PmsClient(
         false
     }
 
+    /**
+     * Stops a transcode session (`/video/:/transcode/universal/stop`,
+     * verified 200 in the M3 spike) so the server stops converting a
+     * stream the player has left. Best-effort.
+     */
+    suspend fun stopTranscode(session: String): Boolean = try {
+        val url = pmsUrl("/video/:/transcode/universal/stop")
+            .newBuilder()
+            .addQueryParameter("session", session)
+            .build()
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(url)
+                .header("X-Plex-Token", server.accessToken)
+                .build()
+            http.newCall(request).execute().use { it.isSuccessful }
+        }
+    } catch (e: Exception) {
+        false
+    }
+
     /** Marks an item unwatched (viewCount and resume offset cleared): PMS `/:/unscrobble`. */
     suspend fun unscrobble(ratingKey: String): Boolean = try {
         val url = pmsUrl("/:/unscrobble")

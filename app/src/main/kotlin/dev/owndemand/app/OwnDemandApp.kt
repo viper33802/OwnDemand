@@ -15,6 +15,7 @@ class OwnDemandApp : Application() {
         // Ensure the stable client identifier exists before any request uses it.
         CoroutineScope(SupervisorJob()).launch {
             container.lazyClientId = container.settingsRepository.ensureClientIdentifier()
+            container.settingsRepository.ensureQualitySettings()
         }
     }
 }

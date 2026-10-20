@@ -56,6 +56,15 @@ import dev.owndemand.app.ui.containerViewModel
 import dev.owndemand.app.ui.isTablet
 import dev.owndemand.app.ui.player.VideoPlayer
 import dev.owndemand.app.ui.useSideRail
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.ui.draw.clip
 
 /**
  * Playback-first watch screen (AGENTS.md §5): the video starts
@@ -74,11 +83,44 @@ fun WatchScreen(
     onOpenChannel: (String) -> Unit,
     /** Opens another video (Up next) as its own watch screen. */
     onPlay: (String) -> Unit,
+    /** Autoplay: opens the next video, keeping fullscreen as it is. */
+    onAutoplay: (String) -> Unit = onPlay,
 ) {
     val vm: WatchViewModel = containerViewModel(key = ratingKey) { WatchViewModel(it, ratingKey) }
     val item by vm.item.collectAsStateWithLifecycle()
     val upNext by vm.upNext.collectAsStateWithLifecycle()
     val error by vm.error.collectAsStateWithLifecycle()
+
+    // Autoplay next (Chunk 3): when this video ends, count down 5 s on top
+    // of the player, then open the first Up-next video not yet finished.
+    // One global switch in Settings; Cancel stops it for this ending.
+    val endedKey by vm.playback.endedKey.collectAsStateWithLifecycle()
+    val autoplayOn = container.settingsRepository.settings
+        .collectAsStateWithLifecycle(initialValue = null).value?.autoplay == true
+    val nextUp = pickAutoplayNext(upNext)
+    var cancelledFor by remember(ratingKey) { mutableStateOf<String?>(null) }
+    var secondsLeft by remember(ratingKey) { mutableIntStateOf(AUTOPLAY_SECONDS) }
+    val countdownNext = nextUp.takeIf { autoplayOn && endedKey == ratingKey && cancelledFor != endedKey }
+    LaunchedEffect(countdownNext?.ratingKey, endedKey) {
+        val next = countdownNext ?: return@LaunchedEffect
+        secondsLeft = AUTOPLAY_SECONDS
+        while (secondsLeft > 0) {
+            kotlinx.coroutines.delay(1_000)
+            secondsLeft--
+        }
+        onAutoplay(next.ratingKey)
+    }
+    val playerOverlay: (@Composable BoxScope.() -> Unit)? = countdownNext?.let { next ->
+        {
+            AutoplayCountdown(
+                next = next,
+                secondsLeft = secondsLeft,
+                onPlayNow = { onAutoplay(next.ratingKey) },
+                onCancel = { cancelledFor = endedKey },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+            )
+        }
+    }
 
     // Leaving the watch screen hands playback to the miniplayer (M4): the
     // player keeps running and the timeline loop keeps reporting.
@@ -208,6 +250,7 @@ fun WatchScreen(
                 rotateArmed = false
             },
             onDock = onBack,
+            overlay = playerOverlay,
             modifier = Modifier.fillMaxSize(),
         )
         return
@@ -233,6 +276,7 @@ fun WatchScreen(
                         fullscreen = false,
                         onToggleFullscreen = { onFullscreenChange(true) },
                         onDock = onBack,
+                        overlay = playerOverlay,
                         modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
                     )
                     DescriptionCard(current, onOpenChannel)
@@ -274,6 +318,7 @@ fun WatchScreen(
                     fullscreen = false,
                     onToggleFullscreen = { onFullscreenChange(true) },
                     onDock = onBack,
+                    overlay = playerOverlay,
                     modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
                 )
                 DescriptionCard(current, onOpenChannel)
@@ -366,6 +411,44 @@ private fun DescriptionCard(item: ItemDto, onOpenChannel: (String) -> Unit) {
                     .clickable { expanded = !expanded }
                     .padding(top = 8.dp, bottom = 4.dp, end = 24.dp),
             )
+        }
+    }
+}
+
+/** Autoplay's next video: the first Up-next one not already finished. */
+fun pickAutoplayNext(upNext: List<ItemDto>): ItemDto? = upNext.firstOrNull { !it.isFullyWatched }
+
+/** Seconds the autoplay countdown waits before opening the next video. */
+const val AUTOPLAY_SECONDS = 5
+
+/** "Up next in N" card over the player: Play now / Cancel. */
+@Composable
+private fun AutoplayCountdown(
+    next: ItemDto,
+    secondsLeft: Int,
+    onPlayNow: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .widthIn(max = 320.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black.copy(alpha = 0.8f))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text("Up next in $secondsLeft", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
+        Text(
+            displayTitle(next.title, next.channelName),
+            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onCancel) { Text("Cancel", color = Color.White) }
+            Spacer(Modifier.width(4.dp))
+            Button(onClick = onPlayNow) { Text("Play now") }
         }
     }
 }

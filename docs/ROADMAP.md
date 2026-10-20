@@ -44,6 +44,28 @@ Builds on the single-video update path from 0.2.0.
 Separate chunk: it changes how Android runs the player (a background
 service), so it needs its own testing.
 
+Built 2026-10-19 (decisions from the user):
+- PiP and background audio both on by default, each with a Settings switch.
+  With background audio off, leaving the app pauses (PiP still plays).
+- Notification / lock screen / PiP / headset buttons: previous · play-pause
+  · next. Next = the first unfinished Up-next video not yet played this
+  session. Previous = the video before this one this session; more than
+  5 s in (or none before it) restarts the current one. ±10 s stays in the
+  in-app player only.
+- Outside the app, autoplay starts the next video at once (no countdown).
+- Artwork, title and channel on the lock screen; the artwork goes through
+  an app-private URI so no server address or token is in media metadata.
+- Media notifications need no notification permission (Android exempts
+  them), so the app asks for none.
+- PiP draws on a SurfaceView. Closing the PiP window pauses; swiping the
+  app away from Recents stops playback.
+- A drop to 480p in PiP / background was tried and removed: the switch
+  lagged visibly in PiP (checked on the Tab S6) and gapped the audio.
+- The emulator's GPU crashed repeatedly on PiP and its decoder sometimes
+  stalled when the video surface changed while a stream started; the app
+  now re-seeks in place when stuck "buffering" with data loaded. Check
+  PiP on a real device.
+
 ## Chunk 5 — Polish and distribution · small
 
 - Accessibility pass: screen-reader labels and touch targets on the custom

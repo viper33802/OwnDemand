@@ -4,6 +4,7 @@ import dev.owndemand.app.data.plex.dto.ItemDto
 import dev.owndemand.app.data.plex.dto.PartDto
 import dev.owndemand.app.data.plex.dto.StreamDto
 import dev.owndemand.app.domain.PlexServer
+import dev.owndemand.app.domain.VideoQuality
 
 /**
  * Client-side playback decision (M3 spike: PMS 1.43 ignores
@@ -36,14 +37,32 @@ object PlaybackDecision {
     fun hlsTranscodeUrl(
         server: PlexServer,
         itemKey: String,
-        dataSaver: Boolean = false,
+        quality: VideoQuality = VideoQuality.Original,
+        /**
+         * Unique per playback start. Without it PMS can attach the request
+         * to this device's previous session and ignore the new cap (seen
+         * switching from a direct file to a 720p conversion mid-video).
+         */
+        session: String? = null,
     ): String =
         server.baseUrl + "/video/:/transcode/universal/start.m3u8" +
             "?path=" + encode("/library/metadata/$itemKey") +
             "&mediaIndex=0&partIndex=0&protocol=hls&timeout=10000" +
-            // Quality caps verified against a live server 2026-10-16 (480p/1200k
-            // yields RESOLUTION=718x404, BANDWIDTH=895000).
-            if (dataSaver) "&maxVideoBitrate=1200&videoQuality=480p&audioBitrate=128" else ""
+            quality.transcodeParams +
+            (session?.let { "&session=" + encode(it) } ?: "")
+
+    /**
+     * The part to play as-is under [quality], or null → HLS transcode at
+     * that cap. A capped quality still direct-plays videos already at or
+     * below the cap (no needless quality loss); unknown height counts as
+     * "too tall" so the cap is never exceeded.
+     */
+    fun directPlayPart(item: ItemDto, quality: VideoQuality): PartDto? {
+        val part = directPlayPart(item) ?: return null
+        val cap = quality.maxHeight ?: return part
+        val height = part.videoStream?.height ?: 0
+        return part.takeIf { height in 1..cap }
+    }
 
     /**
      * SRT sidecar for a subtitle stream (`/library/streams/{id}`; verified

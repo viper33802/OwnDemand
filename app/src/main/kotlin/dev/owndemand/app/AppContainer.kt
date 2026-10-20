@@ -109,7 +109,7 @@ class AppContainer(context: Context) {
 
     fun playbackManager(): PlaybackManager {
         playbackManager?.let { return it }
-        return PlaybackManager(
+        val manager = PlaybackManager(
             appContext,
             // Always the current address: it can change mid-session.
             { repository() },
@@ -120,7 +120,107 @@ class AppContainer(context: Context) {
             onItemSettled = { key -> appScope.launch { libraryIndex.refreshItem(repository(), key) } },
             // A network drop mid-playback: maybe the address changed.
             recoverAddress = { connections.ensureReachable(maxAgeMs = 0) },
-        ).also { playbackManager = it }
+            // "Next" from the notification / headset: Up-next order.
+            nextCandidates = { libraryIndex.items.value.orEmpty() },
+        )
+        playbackManager = manager
+        manager.setBackgroundMode(!appVisible || _inPip.value)
+        manager.autoplayEnabled = autoplayEnabled
+        playbackJob = appScope.launch {
+            launch { manager.wantsToPlay.collect { _videoActive.value = it } }
+            launch { manager.currentItem.collect { _playingItem.value = it } }
+            // The first video starts the media session (notification, lock
+            // screen, headset buttons, background audio).
+            launch { manager.currentItem.collect { if (it != null) bindPlaybackService() } }
+        }
+        return manager
+    }
+
+    private var playbackJob: Job? = null
+
+    /** The player, if one was created (never creates it). */
+    fun playbackManagerOrNull(): PlaybackManager? = playbackManager
+
+    // ---- Playback outside the app (Chunk 4) ----
+
+    /** Notification / lock-screen artwork, fetched with the app's own client. */
+    val artworkLoader: dev.owndemand.app.playback.ArtworkBitmapLoader by lazy {
+        dev.owndemand.app.playback.ArtworkBitmapLoader(
+            fetch = { path ->
+                val url = repository().artworkUrl(path)
+                httpClient.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { response ->
+                    if (response.isSuccessful) response.body.bytes() else null
+                }
+            },
+            scope = appScope,
+        )
+    }
+
+    /** Our own connection to [PlaybackService]: keeps the session alive. */
+    private var sessionController: com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.MediaController>? = null
+
+    private fun bindPlaybackService() {
+        if (sessionController != null) return
+        val token = androidx.media3.session.SessionToken(
+            appContext,
+            android.content.ComponentName(appContext, dev.owndemand.app.playback.PlaybackService::class.java),
+        )
+        sessionController = androidx.media3.session.MediaController.Builder(appContext, token).buildAsync()
+    }
+
+    private fun unbindPlaybackService() {
+        sessionController?.let { androidx.media3.session.MediaController.releaseFuture(it) }
+        sessionController = null
+        appContext.stopService(android.content.Intent(appContext, dev.owndemand.app.playback.PlaybackService::class.java))
+    }
+
+    /** The app was swiped away from Recents: end playback, like closing the miniplayer. */
+    fun stopPlaybackFromSystem() {
+        playbackManager?.stopAndReport()
+    }
+
+    /** The Autoplay setting (in the background the next video plays at once). */
+    @Volatile
+    var autoplayEnabled: Boolean = true
+        set(value) {
+            field = value
+            playbackManager?.autoplayEnabled = value
+        }
+
+    private val _playingItem = kotlinx.coroutines.flow.MutableStateFlow<dev.owndemand.app.data.plex.dto.ItemDto?>(null)
+
+    /** The video in the player, whichever player instance is current. */
+    val playingItem: kotlinx.coroutines.flow.StateFlow<dev.owndemand.app.data.plex.dto.ItemDto?> = _playingItem
+
+    /** A video is loaded and playing (or about to): leaving the app enters PiP. */
+    private val _videoActive = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val videoActive: kotlinx.coroutines.flow.StateFlow<Boolean> = _videoActive
+
+    private val _inPip = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** The activity is in picture-in-picture: the UI shows the video only. */
+    val inPip: kotlinx.coroutines.flow.StateFlow<Boolean> = _inPip
+
+    /** Activity started (visible, PiP included). */
+    @Volatile
+    private var appVisible = true
+
+    /** Settings: keep playing after leaving the app (not in PiP). */
+    @Volatile
+    var backgroundPlayEnabled: Boolean = true
+
+    fun setInPip(inPip: Boolean) {
+        _inPip.value = inPip
+        updateBackgroundMode()
+    }
+
+    /** The PiP window was closed: the video pauses (it stays in the notification). */
+    fun onPipDismissed() {
+        playbackManager?.player?.pause()
+    }
+
+    private fun updateBackgroundMode() {
+        playbackManager?.setBackgroundMode(!appVisible || _inPip.value)
     }
 
     // ---- Video actions (long-press menu) ----
@@ -139,6 +239,11 @@ class AppContainer(context: Context) {
 
     /** Releases the player (sign-out / server change); recreate afterwards. */
     fun releasePlayback() {
+        unbindPlaybackService()
+        playbackJob?.cancel()
+        playbackJob = null
+        _videoActive.value = false
+        _playingItem.value = null
         playbackManager?.let { runCatching { it.player.release() } }
         playbackManager = null
     }
@@ -173,11 +278,24 @@ class AppContainer(context: Context) {
 
     private var networkJob: Job? = null
 
+    private val _metered = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** True on mobile data / metered networks: picks the mobile quality cap. */
+    val metered: kotlinx.coroutines.flow.StateFlow<Boolean> = _metered
+
     init {
         // Wi-Fi ↔ mobile data (leaving or reaching home): re-check the address
         // once the new network has settled.
         val cm = appContext.getSystemService(ConnectivityManager::class.java)
         cm?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(
+                network: Network,
+                caps: android.net.NetworkCapabilities,
+            ) {
+                _metered.value =
+                    !caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            }
+
             override fun onAvailable(network: Network) {
                 appScope.launch {
                     networkJob?.cancel()
@@ -196,6 +314,10 @@ class AppContainer(context: Context) {
 
     fun onAppBackground() {
         backgroundedAtMs = System.currentTimeMillis()
+        appVisible = false
+        // Background audio off: leaving the app pauses (PiP keeps playing).
+        if (!backgroundPlayEnabled && !_inPip.value) playbackManager?.player?.pause()
+        updateBackgroundMode()
     }
 
     /**
@@ -204,6 +326,8 @@ class AppContainer(context: Context) {
      * states) — the same as a pull-to-refresh on Home.
      */
     fun onAppForeground() {
+        appVisible = true
+        updateBackgroundMode()
         val away = backgroundedAtMs
         backgroundedAtMs = null
         if (!shouldRefreshOnReturn(away, System.currentTimeMillis())) return

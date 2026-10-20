@@ -94,5 +94,11 @@ data class StreamDto(
     val width: Int = 0,
     val height: Int = 0,
     val language: String? = null,
+    /** BCP-47 tag, e.g. "en" (newer PMS). */
+    val languageTag: String? = null,
+    /** ISO 639-2 code, e.g. "eng". */
+    val languageCode: String? = null,
+    /** PMS display title, e.g. "English (SRT External)". */
+    val displayTitle: String? = null,
     val selected: Boolean = false,
 )
