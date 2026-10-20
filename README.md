@@ -47,7 +47,8 @@ accounts, no backend, no analytics, no third-party services.
 - **Home** — fresh additions mixed with things you haven't watched yet,
   plus a *Continue watching* row that resumes where you left off.
 - **Channels** — your Plex Collections presented as channels, with channel
-  artwork; a two-pane channel browser on tablets.
+  artwork; a two-pane channel browser on tablets. **Play** a whole channel
+  oldest first, newest first or shuffled, once through.
 - **Playback-first watch screen** — tap any card and playback starts
   immediately. Expandable description, *Up next*, fullscreen, captions,
   scrub previews, double-tap seek, pinch-to-zoom.

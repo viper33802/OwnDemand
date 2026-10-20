@@ -1,5 +1,7 @@
 package dev.owndemand.app.ui.watch
 
+import dev.owndemand.app.playback.queueNextKey
+import dev.owndemand.app.playback.queueRemaining
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -97,7 +99,16 @@ fun WatchScreen(
     val endedKey by vm.playback.endedKey.collectAsStateWithLifecycle()
     val autoplayOn = container.settingsRepository.settings
         .collectAsStateWithLifecycle(initialValue = null).value?.autoplay == true
-    val nextUp = pickAutoplayNext(upNext)
+    // Playing a channel (Chunk 8): its queue replaces Up next, and autoplay
+    // follows it once through (nothing after the channel's last video).
+    val queue = vm.playback.queue.collectAsStateWithLifecycle().value
+        ?.takeIf { ratingKey in it.keys }
+    val nextUp = if (queue != null) {
+        queueNextKey(queue, ratingKey)?.let { key -> queue.items.firstOrNull { it.ratingKey == key } }
+    } else {
+        pickAutoplayNext(upNext)
+    }
+    val upNextShown = if (queue != null) queueRemaining(queue, ratingKey) else upNext
     var cancelledFor by remember(ratingKey) { mutableStateOf<String?>(null) }
     var secondsLeft by remember(ratingKey) { mutableIntStateOf(AUTOPLAY_SECONDS) }
     val countdownNext = nextUp.takeIf { autoplayOn && endedKey == ratingKey && cancelledFor != endedKey }
@@ -292,13 +303,9 @@ fun WatchScreen(
                         .weight(0.4f)
                         .fillMaxHeight(),
                 ) {
-                    Text(
-                        "Up next",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    )
+                    UpNextHeader(queue, upNextShown.isEmpty(), onStopChannel = vm.playback::clearQueue)
                     LazyColumn(Modifier.weight(1f)) {
-                        items(upNext, key = { it.ratingKey }) { next ->
+                        items(upNextShown, key = { it.ratingKey }) { next ->
                             FeedCard(
                                 item = next,
                                 artworkUrl = artworkFor(next),
@@ -323,13 +330,9 @@ fun WatchScreen(
                 )
                 DescriptionCard(current, onOpenChannel)
                 HorizontalDivider()
-                Text(
-                    "Up next",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                )
+                UpNextHeader(queue, upNextShown.isEmpty(), onStopChannel = vm.playback::clearQueue)
                 LazyColumn(Modifier.weight(1f)) {
-                    items(upNext, key = { it.ratingKey }) { next ->
+                    items(upNextShown, key = { it.ratingKey }) { next ->
                         FeedCard(
                             item = next,
                             artworkUrl = artworkFor(next),
@@ -410,6 +413,54 @@ private fun DescriptionCard(item: ItemDto, onOpenChannel: (String) -> Unit) {
                 modifier = Modifier
                     .clickable { expanded = !expanded }
                     .padding(top = 8.dp, bottom = 4.dp, end = 24.dp),
+            )
+        }
+    }
+}
+
+/**
+ * "Up next", or while a channel plays: "Playing <channel> · oldest first"
+ * with an × that stops playing the channel (Up next goes back to normal).
+ */
+@Composable
+private fun UpNextHeader(
+    queue: dev.owndemand.app.playback.PlayQueue?,
+    nothingLeft: Boolean,
+    onStopChannel: () -> Unit,
+) {
+    if (queue == null) {
+        Text(
+            "Up next",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        )
+        return
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Playing ${queue.channelTitle} · ${queue.order.label.lowercase()}",
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (nothingLeft) {
+                Text(
+                    "That's the whole channel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        androidx.compose.material3.IconButton(onClick = onStopChannel) {
+            androidx.compose.material3.Icon(
+                androidx.compose.ui.res.painterResource(dev.owndemand.app.R.drawable.ic_close),
+                contentDescription = "Stop playing this channel",
             )
         }
     }
