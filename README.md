@@ -53,6 +53,10 @@ accounts, no backend, no analytics, no third-party services.
   scrub previews, double-tap seek, pinch-to-zoom.
 - **Miniplayer** — drag the video down (or switch tabs) and it keeps
   playing in a floating, draggable miniplayer while you browse.
+- **Picture-in-picture and background audio** — leave the app and the
+  video keeps going in a small floating window, or as sound with
+  previous / play-pause / next on the notification, lock screen and
+  headset. Both can be switched off in Settings.
 - **Search** across the selected library — titles and channel names.
 - **Resume & watched state** synced back to Plex, so other Plex clients
   stay in step.

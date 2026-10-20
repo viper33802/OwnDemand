@@ -29,6 +29,10 @@ data class AppSettings(
     val qualityMobile: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Q720,
     /** Play the first Up-next video after a 5 s countdown (on by default). */
     val autoplay: Boolean = true,
+    /** Leaving the app while a video plays shrinks it into a floating window (Chunk 4). */
+    val pictureInPicture: Boolean = true,
+    /** Keep playing (audio) after leaving the app, with notification controls (Chunk 4). */
+    val backgroundPlay: Boolean = true,
     /** Plex account name, shown in Settings (user direction 2026-10-16). */
     val accountUsername: String? = null,
     /** Text-size multiplier over the system font scale; 1 = as-is (user
@@ -78,6 +82,8 @@ class SettingsRepository(
         val QUALITY_WIFI = stringPreferencesKey("quality_wifi")
         val QUALITY_MOBILE = stringPreferencesKey("quality_mobile")
         val AUTOPLAY = androidx.datastore.preferences.core.booleanPreferencesKey("autoplay")
+        val PICTURE_IN_PICTURE = androidx.datastore.preferences.core.booleanPreferencesKey("picture_in_picture")
+        val BACKGROUND_PLAY = androidx.datastore.preferences.core.booleanPreferencesKey("background_play")
         val ACCOUNT_USERNAME = stringPreferencesKey("account_username")
         val FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("font_scale")
         /** "ratingKey:offsetMs" entries — see [AppSettings.hiddenContinue]. */
@@ -103,6 +109,8 @@ class SettingsRepository(
                 qualityMobile = dev.owndemand.app.domain.VideoQuality.fromName(prefs[Keys.QUALITY_MOBILE])
                     ?: dev.owndemand.app.domain.VideoQuality.Q720,
                 autoplay = prefs[Keys.AUTOPLAY] ?: true,
+                pictureInPicture = prefs[Keys.PICTURE_IN_PICTURE] ?: true,
+                backgroundPlay = prefs[Keys.BACKGROUND_PLAY] ?: true,
                 accountUsername = prefs[Keys.ACCOUNT_USERNAME],
                 fontScale = prefs[Keys.FONT_SCALE] ?: 1f,
                 hiddenContinue = prefs[Keys.HIDDEN_CONTINUE].orEmpty().mapNotNull { entry ->
@@ -211,6 +219,14 @@ class SettingsRepository(
 
     suspend fun setAutoplay(enabled: Boolean) = store.edit { prefs ->
         prefs[Keys.AUTOPLAY] = enabled
+    }
+
+    suspend fun setPictureInPicture(enabled: Boolean) = store.edit { prefs ->
+        prefs[Keys.PICTURE_IN_PICTURE] = enabled
+    }
+
+    suspend fun setBackgroundPlay(enabled: Boolean) = store.edit { prefs ->
+        prefs[Keys.BACKGROUND_PLAY] = enabled
     }
 
     /** App-wide text-size multiplier; 1f clears it back to the system scale. */

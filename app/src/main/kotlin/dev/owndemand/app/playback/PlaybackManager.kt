@@ -47,6 +47,8 @@ class PlaybackManager(
      * video restarts from the new address at the same position.
      */
     private val recoverAddress: suspend () -> Boolean = { false },
+    /** The library in Up-next order (newest first), for "next" (Chunk 4). */
+    private val nextCandidates: () -> List<ItemDto> = { emptyList() },
 ) {
     private val repository: PlexRepository get() = repositoryProvider()
 
@@ -55,6 +57,10 @@ class PlaybackManager(
 
         /** Scrub-preview bucket: BIF keyframes are ~10 s apart. */
         private const val PREVIEW_BUCKET_MS = 5_000L
+
+        /** Buffering this long with data loaded ahead counts as a decoder stall. */
+        private const val STALL_CHECK_MS = 3_000L
+        private const val STALL_BUFFERED_AHEAD_MS = 3_000L
 
         /** Network-drop recovery attempts and backoff (M6). */
         private const val MAX_NETWORK_RETRIES = 4
@@ -77,6 +83,28 @@ class PlaybackManager(
     /** The cap in force now: the in-player choice, else the Settings cap. */
     val quality: dev.owndemand.app.domain.VideoQuality
         get() = effectiveQuality(_qualityOverride.value, _settingsQuality.value)
+
+    /** The app is in the background or picture-in-picture (Chunk 4). */
+    private var background = false
+
+    /**
+     * Leaving / returning to the app or picture-in-picture. The stream keeps
+     * its quality (a 480p drop was tried and removed 2026-10-19: the switch
+     * lagged visibly in PiP and left a gap in background audio).
+     */
+    fun setBackgroundMode(on: Boolean) {
+        if (background == on) return
+        background = on
+        // Left the app while the autoplay countdown was showing: play the
+        // next video now, as autoplay does in the background.
+        if (on && autoplayEnabled && _endedKey.value != null && _endedKey.value == currentRatingKey) {
+            skipToNext()
+        }
+    }
+
+    /** The Autoplay setting; in the background the next video plays at once. */
+    @Volatile
+    var autoplayEnabled: Boolean = true
 
     /** Settings cap changed (setting edited, or Wi-Fi <-> mobile data). */
     fun setQuality(newQuality: dev.owndemand.app.domain.VideoQuality) {
@@ -118,9 +146,32 @@ class PlaybackManager(
     val player: ExoPlayer by lazy {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            // Background playback (Chunk 4): keep Wi-Fi and the CPU awake
+            // while playing, pause for calls / other apps' audio, and pause
+            // when headphones are unplugged.
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            .setHandleAudioBecomingNoisy(true)
             .build()
             .apply {
                 addListener(object : Player.Listener {
+                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                        _wantsToPlay.value = playWhenReady && _currentItem.value != null
+                    }
+
+                    override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                        if (videoSize.width > 0 && videoSize.height > 0) {
+                            _videoAspect.value =
+                                videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                        }
+                    }
+
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _isPlaying.value = isPlaying
                         // A user pause (playWhenReady off while ready) saves
@@ -156,6 +207,17 @@ class PlaybackManager(
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    /** A video is loaded and set to play (also while buffering): PiP-worthy. */
+    private val _wantsToPlay = MutableStateFlow(false)
+    val wantsToPlay: StateFlow<Boolean> = _wantsToPlay.asStateFlow()
+
+    /** Width / height of the playing video (picture-in-picture window shape). */
+    private val _videoAspect = MutableStateFlow(16f / 9f)
+    val videoAspect: StateFlow<Float> = _videoAspect.asStateFlow()
+
+    /** Videos played before the current one, oldest first ("previous"). */
+    private var history: List<String> = emptyList()
 
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
@@ -203,6 +265,21 @@ class PlaybackManager(
     fun previewFrame(timeMs: Long): ByteArray? = _bifIndex.value?.frameAt(timeMs)
 
     private var networkRetries = 0
+    private var stallJob: Job? = null
+
+    /**
+     * Stuck "buffering" although plenty is loaded: the decoder did not pick
+     * up after its surface changed (seen on the emulator when the video
+     * moved to a new surface while a stream started). A seek in place
+     * flushes the decoder and playback continues.
+     */
+    private suspend fun recoverIfStalled() {
+        delay(STALL_CHECK_MS)
+        if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) return
+        if (player.bufferedPosition - player.currentPosition < STALL_BUFFERED_AHEAD_MS) return
+        android.util.Log.i("OwnDemand", "playback stalled with data loaded; re-seeking")
+        player.seekTo(player.currentPosition)
+    }
     private var retryJob: Job? = null
 
     fun previewUrl(timeMs: Long): String? {
@@ -232,6 +309,8 @@ class PlaybackManager(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 _isBuffering.value = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) finishCurrent()
+                stallJob?.cancel()
+                if (playbackState == Player.STATE_BUFFERING) stallJob = scope.launch { recoverIfStalled() }
             }
         })
     }
@@ -253,9 +332,13 @@ class PlaybackManager(
         // The in-player quality choice is per video: a different video
         // starts on the Settings cap again.
         if (_currentItem.value?.ratingKey != item.ratingKey) _qualityOverride.value = null
-        // Switching away from another video: save where it was left.
+        // Switching away from another video: save where it was left, and
+        // remember it for "previous" (unless previous is what brought us here).
         _currentItem.value?.let { previous ->
-            if (previous.ratingKey != item.ratingKey) settleAfter(previous.ratingKey, report("stopped"))
+            if (previous.ratingKey != item.ratingKey) {
+                settleAfter(previous.ratingKey, report("stopped"))
+                if (recordHistory) history = pushHistory(history, previous.ratingKey)
+            }
         }
         endHandledKey = null
         _endedKey.value = null
@@ -294,6 +377,7 @@ class PlaybackManager(
             .setUri(uri)
             .apply { mime?.let { setMimeType(it) } }
             .setMediaId(item.ratingKey)
+            .setMediaMetadata(sessionMetadata(item))
         // Every subtitle file the video has (Chunk 3), so the CC menu can
         // offer each language; the preferred one is picked automatically.
         if (subtitles.isNotEmpty()) {
@@ -312,8 +396,67 @@ class PlaybackManager(
         player.prepare()
         if (item.viewOffset > 0) player.seekTo(item.viewOffset)
         player.playWhenReady = true
+        _wantsToPlay.value = true
         report("buffering")
     }
+
+    /** False only while "previous" plays a video from the history. */
+    private var recordHistory = true
+
+    /** Notification / lock screen / headset / PiP "next": the next Up-next video. */
+    fun skipToNext() {
+        val current = _currentItem.value ?: return
+        val played = history.toSet() + current.ratingKey
+        val next = pickNextVideo(nextCandidates(), current.ratingKey, played) ?: return
+        playByKey(next.ratingKey, fromHistory = false)
+    }
+
+    /** "Previous": the video before this one, or the start of this one. */
+    fun skipToPrevious() {
+        val currentKey = _currentItem.value?.ratingKey ?: return
+        history = history.filter { it != currentKey }
+        when (val action = previousAction(player.currentPosition, history)) {
+            PreviousAction.Restart -> {
+                // Starting over counts as a new viewing (end handling runs again).
+                endHandledKey = null
+                _endedKey.value = null
+                seekTo(0)
+            }
+            is PreviousAction.PlayPrevious -> {
+                history = history.dropLast(1)
+                playByKey(action.ratingKey, fromHistory = true)
+            }
+        }
+    }
+
+    /** Plays a video by key with its full details (resume offset, subtitles). */
+    private fun playByKey(ratingKey: String, fromHistory: Boolean) {
+        scope.launch {
+            val detail = runCatching { repository.item(ratingKey) }
+                .onFailure { android.util.Log.w("OwnDemand", "next/previous: could not load the video", it) }
+                .getOrNull() ?: return@launch
+            recordHistory = !fromHistory
+            try {
+                play(detail)
+            } finally {
+                recordHistory = true
+            }
+        }
+    }
+
+    /**
+     * Title, channel and artwork for the notification and lock screen. The
+     * artwork is an app-private URI the session's bitmap loader resolves, so
+     * no server address or token ever leaves the app in media metadata.
+     */
+    private fun sessionMetadata(item: ItemDto): androidx.media3.common.MediaMetadata =
+        androidx.media3.common.MediaMetadata.Builder()
+            .setTitle(dev.owndemand.app.ui.common.displayTitle(item.title, item.channelName))
+            .setArtist(item.channelName)
+            .setDisplayTitle(dev.owndemand.app.ui.common.displayTitle(item.title, item.channelName))
+            .setSubtitle(item.channelName)
+            .apply { if (item.thumb.isNotBlank()) setArtworkUri(artworkUri(item.thumb)) }
+            .build()
 
     fun togglePlayPause() {
         if (player.isPlaying) player.pause() else player.play()
@@ -432,6 +575,9 @@ class PlaybackManager(
             repository.scrobble(item.ratingKey)
             onItemSettled(item.ratingKey)
         }
+        // In the background / picture-in-picture there is no countdown: the
+        // next video starts at once (user choice 2026-10-19).
+        if (background && autoplayEnabled) skipToNext()
     }
 
     private fun settleAfter(ratingKey: String, reported: Job?) {
@@ -466,6 +612,7 @@ class PlaybackManager(
         player.clearMediaItems()
         _currentItem.value = null
         _isPlaying.value = false
+        _wantsToPlay.value = false
         _reconnecting.value = false
         previewPartId = null
         _bifIndex.value = null

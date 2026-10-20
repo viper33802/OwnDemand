@@ -289,6 +289,8 @@ private fun ShellContent(
                 onSwitchServer = mainVm::switchServer,
                 onQualityChange = mainVm::setQuality,
                 onAutoplayChange = mainVm::setAutoplay,
+                onPictureInPictureChange = mainVm::setPictureInPicture,
+                onBackgroundPlayChange = mainVm::setBackgroundPlay,
                 onFontScaleChange = mainVm::setFontScale,
             )
         }

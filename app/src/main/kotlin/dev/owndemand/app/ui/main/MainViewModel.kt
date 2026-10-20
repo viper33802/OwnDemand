@@ -101,6 +101,32 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             ) { s, metered -> if (metered) s.qualityMobile else s.qualityWifi }
                 .collect { q -> runCatching { container.playbackManager().setQuality(q) } }
         }
+        // Autoplay and background audio, for playback outside the app (Chunk 4).
+        viewModelScope.launch {
+            container.settingsRepository.settings.collect { s ->
+                container.backgroundPlayEnabled = s.backgroundPlay
+                container.autoplayEnabled = s.autoplay
+            }
+        }
+        // Next / previous / background autoplay change the video outside the
+        // UI: an open watch screen follows (keeping fullscreen as it is).
+        viewModelScope.launch {
+            container.playingItem.collect { item ->
+                val key = item?.ratingKey ?: return@collect
+                if (watchKey.value != null && watchKey.value != key) watchKey.value = key
+            }
+        }
+        // Back from picture-in-picture: land on the watch screen of the video
+        // (also when it was playing in the miniplayer before).
+        viewModelScope.launch {
+            var wasInPip = false
+            container.inPip.collect { inPip ->
+                if (wasInPip && !inPip && watchKey.value == null) {
+                    container.playbackManagerOrNull()?.currentRatingKey?.let { watchKey.value = it }
+                }
+                wasInPip = inPip
+            }
+        }
         // Server address: confirm it answers, then refresh the address list
         // from plex.tv (installs predating the list stored only one address;
         // home internet addresses change) and re-confirm against it.
@@ -153,6 +179,14 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setAutoplay(enabled: Boolean) {
         viewModelScope.launch { container.settingsRepository.setAutoplay(enabled) }
+    }
+
+    fun setPictureInPicture(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setPictureInPicture(enabled) }
+    }
+
+    fun setBackgroundPlay(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setBackgroundPlay(enabled) }
     }
 
     /** App-wide text size, from the Settings slider. */
