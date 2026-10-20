@@ -219,6 +219,31 @@ class PlaybackManager(
     /** Videos played before the current one, oldest first ("previous"). */
     private var history: List<String> = emptyList()
 
+    private val _queue = MutableStateFlow<PlayQueue?>(null)
+
+    /**
+     * The channel being played (Chunk 8), or null. While set it replaces
+     * Up next for autoplay and every "next" button; it ends when a video
+     * outside it plays or the watch screen's × is tapped.
+     */
+    val queue: StateFlow<PlayQueue?> = _queue.asStateFlow()
+
+    /** Starts playing a channel; the caller then opens its first video. */
+    fun startQueue(queue: PlayQueue) {
+        _queue.value = queue
+    }
+
+    fun clearQueue() {
+        _queue.value = null
+    }
+
+    /** A video's watched state / resume offset changed: keep the queue's copy fresh. */
+    fun patchQueueItem(fresh: ItemDto) {
+        val q = _queue.value ?: return
+        if (fresh.ratingKey !in q.keys) return
+        _queue.value = q.copy(items = q.items.map { if (it.ratingKey == fresh.ratingKey) fresh else it })
+    }
+
     private val _isBuffering = MutableStateFlow(false)
     val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
 
@@ -329,6 +354,8 @@ class PlaybackManager(
     private var endHandledKey: String? = null
 
     fun play(item: ItemDto) {
+        // Playing a video outside the channel being played ends that queue.
+        _queue.value?.let { if (item.ratingKey !in it.keys) _queue.value = null }
         // The in-player quality choice is per video: a different video
         // starts on the Settings cap again.
         if (_currentItem.value?.ratingKey != item.ratingKey) _qualityOverride.value = null
@@ -403,12 +430,30 @@ class PlaybackManager(
     /** False only while "previous" plays a video from the history. */
     private var recordHistory = true
 
-    /** Notification / lock screen / headset / PiP "next": the next Up-next video. */
+    /**
+     * Notification / lock screen / headset / PiP "next": the next video of
+     * the channel being played, else the next Up-next video.
+     */
     fun skipToNext() {
-        val current = _currentItem.value ?: return
+        peekNextKey()?.let { playByKey(it, fromHistory = false) }
+    }
+
+    /**
+     * What "next" would play: the channel's next video (null after its last
+     * one — once through), else the next Up-next video. Null = the player's
+     * next button is greyed.
+     */
+    fun peekNextKey(): String? {
+        val current = _currentItem.value ?: return null
+        _queue.value?.let { queue -> return queueNextKey(queue, current.ratingKey) }
         val played = history.toSet() + current.ratingKey
-        val next = pickNextVideo(nextCandidates(), current.ratingKey, played) ?: return
-        playByKey(next.ratingKey, fromHistory = false)
+        return pickNextVideo(nextCandidates(), current.ratingKey, played)?.ratingKey
+    }
+
+    /** Whether "previous" would do anything at [positionMs] (player button state). */
+    fun hasPrevious(positionMs: Long): Boolean {
+        val currentKey = _currentItem.value?.ratingKey ?: return false
+        return previousAvailable(positionMs, history.filter { it != currentKey })
     }
 
     /** "Previous": the video before this one, or the start of this one. */

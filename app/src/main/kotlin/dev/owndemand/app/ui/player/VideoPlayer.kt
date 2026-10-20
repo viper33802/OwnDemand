@@ -388,7 +388,6 @@ fun VideoPlayer(
                     interactionTick = System.currentTimeMillis()
                 },
                 // ±10 buttons feed the same running total as the taps.
-                onSeekBy = { delta -> seekStep(forward = delta > 0) },
                 onScrubStart = { scrubbing = true; scrubPositionMs = positionMs },
                 onScrub = { scrubPositionMs = it },
                 onScrubEnd = {
@@ -439,7 +438,6 @@ private fun PlayerControls(
     bufferedMs: Long,
     fullscreen: Boolean,
     onTogglePlay: () -> Unit,
-    onSeekBy: (Long) -> Unit,
     onScrubStart: () -> Unit,
     onScrub: (Long) -> Unit,
     onScrubEnd: (Long) -> Unit,
@@ -499,15 +497,23 @@ private fun PlayerControls(
             }
         }
 
-        // Center transport (reference layout): -10 s / play-pause / +10 s,
-        // shown whenever the controls are — a single tap reveals them, a
-        // second tap acts on the center button (spec §2).
+        // Center transport: previous / play-pause / next (Chunk 8, the same
+        // as the notification's buttons; ±10 s stays as the double-tap
+        // gesture). Shown whenever the controls are — a single tap reveals
+        // them, a second tap acts on a button (spec §2). Previous / next
+        // grey out when they would do nothing.
+        val queue by manager.queue.collectAsStateWithLifecycle()
+        val current by manager.currentItem.collectAsStateWithLifecycle()
+        // Re-checked when the channel queue or the video changes, and each
+        // second (watched states and history move on while it plays).
+        val hasNext = remember(queue, current, positionMs / 1_000) { manager.peekNextKey() != null }
+        val hasPrevious = manager.hasPrevious(positionMs)
         Row(
             Modifier.align(Alignment.Center),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircleControl(R.drawable.ic_seek_back, "Back 10 seconds", 48.dp, 26.dp) {
-                onSeekBy(-10_000)
+            CircleControl(R.drawable.ic_skip_previous, "Previous video", 48.dp, 26.dp, enabled = hasPrevious) {
+                manager.skipToPrevious()
             }
             Spacer(Modifier.width(28.dp))
             CircleControl(
@@ -517,8 +523,8 @@ private fun PlayerControls(
                 34.dp,
             ) { onTogglePlay() }
             Spacer(Modifier.width(28.dp))
-            CircleControl(R.drawable.ic_seek_fwd, "Forward 10 seconds", 48.dp, 26.dp) {
-                onSeekBy(10_000)
+            CircleControl(R.drawable.ic_skip_next, "Next video", 48.dp, 26.dp, enabled = hasNext) {
+                manager.skipToNext()
             }
         }
 
@@ -596,6 +602,7 @@ private fun CircleControl(
     description: String,
     size: Dp,
     iconSize: Dp,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Box(
@@ -603,13 +610,14 @@ private fun CircleControl(
             .size(size)
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.45f))
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             painterResource(icon),
             contentDescription = description,
-            tint = Color.White,
+            // Greyed: nothing to go to (Chunk 8).
+            tint = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
             modifier = Modifier.size(iconSize),
         )
     }

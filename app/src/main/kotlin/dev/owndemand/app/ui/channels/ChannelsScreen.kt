@@ -1,5 +1,9 @@
 package dev.owndemand.app.ui.channels
 
+import dev.owndemand.app.playback.orderChannel
+import dev.owndemand.app.playback.PlayQueue
+import dev.owndemand.app.playback.ChannelOrder
+import androidx.compose.material3.FilledTonalButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -388,6 +392,39 @@ fun ChannelDetailScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            // Play the whole channel (Chunk 8): oldest first, newest first
+            // or shuffled, once through.
+            Box {
+                var playMenuOpen by remember { mutableStateOf(false) }
+                val canPlay = state.items.isNotEmpty() && !state.loading
+                FilledTonalButton(
+                    onClick = { playMenuOpen = true },
+                    enabled = canPlay,
+                    contentPadding = PaddingValues(start = 10.dp, end = 14.dp),
+                ) {
+                    Icon(
+                        painterResource(R.drawable.ic_play),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Play")
+                }
+                DropdownMenu(expanded = playMenuOpen, onDismissRequest = { playMenuOpen = false }) {
+                    ChannelOrder.entries.forEach { order ->
+                        DropdownMenuItem(
+                            text = { Text(order.label) },
+                            onClick = {
+                                playMenuOpen = false
+                                val ordered = orderChannel(state.items, order)
+                                val first = ordered.firstOrNull() ?: return@DropdownMenuItem
+                                container.playbackManager().startQueue(PlayQueue(channel.title, order, ordered))
+                                onPlay(first.ratingKey)
+                            },
+                        )
+                    }
+                }
             }
             Box {
                 IconButton(onClick = { menuOpen = true }) {

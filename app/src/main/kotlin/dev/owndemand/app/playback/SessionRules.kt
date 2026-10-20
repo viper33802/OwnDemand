@@ -37,6 +37,13 @@ fun previousAction(positionMs: Long, history: List<String>): PreviousAction =
     }
 
 /**
+ * The player's previous button is greyed only when it would do nothing:
+ * the session's first video, in its first [PREVIOUS_RESTARTS_AFTER_MS].
+ */
+fun previousAvailable(positionMs: Long, history: List<String>): Boolean =
+    history.isNotEmpty() || positionMs > PREVIOUS_RESTARTS_AFTER_MS
+
+/**
  * Next: the first Up-next video (the newest [UP_NEXT_SIZE] of [library],
  * minus the current one) not finished and not already played this session,
  * so pressing next repeatedly never loops back to a skipped video.

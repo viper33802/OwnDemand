@@ -94,6 +94,56 @@ from, videos of a typical length. Each row is labelled for what it is
 recommendations. Starts with a review of what the data supports; requires
 updating the AGENTS.md rule on recommendations.
 
+## Chunk 8 — Play a channel · small–medium
+
+Planned and built 2026-10-19 (user decisions in brackets). Ships as
+0.3.1, a point release.
+
+- **Where:** a **Play** button in the channel page header, next to the
+  sort button (phone page and tablet two-pane alike). It opens three
+  choices: **Oldest first**, **Newest first**, **Shuffle** [one order,
+  no separate "unwatched only" switch]. Nothing is added to the Channels
+  list itself: the channel page is one tap away.
+- **What plays:** every video in the channel, in that order. Order uses
+  the video's original upload date when Plex has it, else the date it was
+  added. Part-watched videos resume where you left off, watched ones start
+  from the beginning [resume as normal]. Shuffle is a fresh random order
+  each time.
+- **Play queue:** while a channel plays, it replaces Up next for
+  everything that moves to the next video: autoplay in the app (the
+  5-second countdown), autoplay outside it, and the next button on the
+  notification, lock screen, headset and PiP window. Previous keeps
+  working from this session's history.
+- **Watch screen:** Up next shows the rest of the queue in order, under
+  a "Playing *Channel* · oldest first" line with an × to stop playing the
+  channel (Up next goes back to normal).
+- **End:** after the last video the queue stops [once through, no loop].
+  Tapping any other video outside the queue also ends it.
+- **Tests:** unit tests for the orders (upload date, added-date
+  fallback), shuffle containing every video exactly once, and next / end
+  of queue. Emulator: each order, autoplay through two videos, next from
+  the notification, end of queue, leaving the queue.
+
+### Also in this PR: previous / next in the player (planned and built 2026-10-19)
+
+- **Buttons:** the player's centre row (shown when you tap the video,
+  inline and fullscreen) becomes **previous · play/pause · next** instead
+  of −10 s · play/pause · +10 s. They do exactly what the notification's
+  buttons do, and use our own drawn icons.
+- **±10 s stays as a gesture:** double-tap the left or right side, with
+  the running total bubble ("+40s"), as now.
+- **Greyed out when there's nothing to do:**
+  - *Next* is greyed when nothing follows: the channel's last video, or
+    no unfinished Up-next video left.
+  - *Previous* is greyed only on the first video of the session in its
+    first 5 s (no earlier video, nothing to restart); otherwise it goes
+    back a video, or restarts after 5 s.
+- **Notification / lock screen / headset:** unchanged (always offer
+  previous and next; at the end of a channel next does nothing).
+- **Tests:** unit tests for when each button is available. Emulator:
+  inline and fullscreen, phone and tablet layouts, greyed states at the
+  start of a session and at the end of a channel.
+
 ## Not planned
 
 Chromecast and offline downloads (large; revisit separately if wanted).

@@ -129,6 +129,8 @@ class AppContainer(context: Context) {
         playbackJob = appScope.launch {
             launch { manager.wantsToPlay.collect { _videoActive.value = it } }
             launch { manager.currentItem.collect { _playingItem.value = it } }
+            // Watched state / resume offsets in the channel being played.
+            launch { libraryIndex.updates.collect { manager.patchQueueItem(it) } }
             // The first video starts the media session (notification, lock
             // screen, headset buttons, background audio).
             launch { manager.currentItem.collect { if (it != null) bindPlaybackService() } }
