@@ -142,39 +142,33 @@ fun segmentAt(segments: List<SkipSegment>, positionMs: Long): SkipSegment? =
     segments.firstOrNull { it.startMs <= positionMs && positionMs < it.endMs }
 
 /**
- * A jump-over segment the player reaches is skipped; one the user seeked
- * into is not (they chose to be there) and a Button category shows its
- * button instead. [autoSkipped] holds what this viewing already skipped
- * with Undo left alone.
+ * The segment with a live "Skip …" button at [positionMs]: any enabled
+ * segment the playhead is inside. Normal playback never sits inside a
+ * jump-over (Auto) segment — it was skipped at its start — so being in one
+ * means the user seeked or resumed into it, or Undo brought them back: the
+ * choice is theirs, so the button offers it.
  */
 fun skipButtonFor(
     segments: List<SkipSegment>,
     modes: Map<SegmentCategory, SkipMode>,
-    autoSkipped: Set<SkipSegment>,
     positionMs: Long,
 ): SkipSegment? {
     val seg = segmentAt(segments, positionMs) ?: return null
-    return when (modes[seg.category] ?: SkipMode.Off) {
-        SkipMode.Off -> null
-        SkipMode.Button -> seg
-        SkipMode.Auto -> seg.takeIf { it in autoSkipped }
-    }
+    return seg.takeIf { (modes[seg.category] ?: SkipMode.Off) != SkipMode.Off }
 }
 
 /**
- * Jump-over segments to schedule a delivery at: only ones still ahead of
- * [afterMs] (a segment already played past shows its button instead), not
- * undone ones, not past the end.
+ * Jump-over segments to schedule a delivery at: every Auto one except
+ * those Undo left alone for this viewing. A delivery only fires when
+ * playback runs across the start, so one behind the playhead waits until
+ * a seek back brings playback up to it again.
  */
 fun autoSkipTargets(
     segments: List<SkipSegment>,
     modes: Map<SegmentCategory, SkipMode>,
-    autoSkipped: Set<SkipSegment>,
-    afterMs: Long,
+    undone: Set<SkipSegment>,
 ): List<SkipSegment> = segments.filter { seg ->
-    (modes[seg.category] ?: SkipMode.Off) == SkipMode.Auto &&
-        seg !in autoSkipped &&
-        seg.startMs > afterMs
+    (modes[seg.category] ?: SkipMode.Off) == SkipMode.Auto && seg !in undone
 }
 
 /**
@@ -189,15 +183,26 @@ fun staleAutoSkip(segment: SkipSegment, positionMs: Long): Boolean =
 /** How late a scheduled delivery may still act on its segment. */
 const val AUTO_SKIP_TOLERANCE_MS = 1_500L
 
-/** "Skipped sponsor · Undo" — where to jump back to. */
-data class SkipNotice(val label: String, val restoreMs: Long)
+/** "Skipped sponsor · Undo" for the segment just jumped over. */
+data class SkipNotice(val segment: SkipSegment) {
+    val label: String get() = segment.category.label
 
-/** The id and settings a playback of [item] should look segments up with. */
-fun segmentLookupFor(item: ItemDto, settings: SegmentSettings): Pair<String, List<SegmentCategory>>? {
+    /** Where Undo jumps back to. */
+    val restoreMs: Long get() = segment.startMs
+}
+
+/** How long the Undo chip stays offered after an automatic skip. */
+const val SKIP_NOTICE_MS = 5_000L
+
+/**
+ * The source id a playback of [item] should look segments up for, or null
+ * for no lookup (setting off, every category off, or no id in the file
+ * name). The lookup asks for every category, so a category switched on
+ * mid-video takes effect without asking again.
+ */
+fun segmentLookupFor(item: ItemDto, settings: SegmentSettings): String? {
     if (!settings.enabled) return null
+    if (settings.modes.values.none { it != SkipMode.Off }) return null
     val file = item.Media.firstOrNull()?.Part?.firstOrNull()?.file ?: return null
-    val id = sourceVideoId(file) ?: return null
-    val wanted = SegmentCategory.entries
-        .filter { (settings.modes[it] ?: SkipMode.Off) != SkipMode.Off }
-    return if (wanted.isEmpty()) null else id to wanted
+    return sourceVideoId(file)
 }

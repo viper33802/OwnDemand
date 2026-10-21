@@ -142,8 +142,9 @@ fun SettingsSheet(
             title = "Skip segments",
             detail = "Jump over sponsors and other marked stretches. While on, the app asks " +
                 "SponsorBlock (sponsor.ajay.app) for a short hash of the video's source id — " +
-                "never which video, no Plex sign-in, no server address, no device details, " +
-                "and nothing is ever sent. Segment data by SponsorBlock, CC BY-NC-SA.",
+                "never which video, no Plex sign-in, no server address, no device details. " +
+                "Read-only: nothing is submitted or voted on. Segment data by SponsorBlock, " +
+                "CC BY-NC-SA.",
             checked = settings.skipSegments,
             onCheckedChange = { on ->
                 if (on) confirmSkipOn = true else onSkipSegmentsChange(false)
@@ -252,11 +253,11 @@ fun SettingsSheet(
                 Text(
                     "So far this app has talked to nothing but Plex. Turning Skip segments on " +
                         "adds one exception: when a video starts, the app asks SponsorBlock " +
-                    "(sponsor.ajay.app) for the first 4 characters of a hash of the video's " +
+                        "(sponsor.ajay.app) for the first 4 characters of a hash of the video's " +
                         "source id. That prefix is shared by thousands of videos, so the " +
                         "service never learns which video you are watching. No Plex sign-in, " +
-                        "server address or device details are ever sent, and nothing is ever " +
-                        "sent back. You can switch this off again at any time.",
+                        "server address or device details are ever sent, and the app never " +
+                        "submits or votes on segments. You can switch this off again at any time.",
                 )
             },
             confirmButton = {

@@ -120,32 +120,30 @@ class SkipSegmentsTest {
     // ---- what to do at a position ----
 
     @Test
-    fun `auto segments are scheduled only while still ahead`() {
-        // Only Auto categories, and only ones that still start after the
-        // playhead (seeking into a segment never auto-skips).
-        assertEquals(
-            listOf(sponsor),
-            autoSkipTargets(listOf(sponsor, selfPromo), modes, emptySet(), afterMs = 0),
-        )
-        assertTrue(autoSkipTargets(listOf(sponsor), modes, emptySet(), afterMs = 20_000).isEmpty())
+    fun `every auto segment is scheduled except undone ones`() {
+        // Only Auto categories. One behind the playhead stays scheduled: its
+        // delivery only fires if a seek back brings playback across it.
+        assertEquals(listOf(sponsor), autoSkipTargets(listOf(sponsor, selfPromo), modes, emptySet()))
         // Undo left this viewing alone with it.
-        assertTrue(autoSkipTargets(listOf(sponsor), modes, setOf(sponsor), 0).isEmpty())
+        assertTrue(autoSkipTargets(listOf(sponsor), modes, setOf(sponsor)).isEmpty())
     }
 
     @Test
-    fun `the button shows for Button segments and for undone Auto ones`() {
-        assertNull(skipButtonFor(listOf(sponsor, selfPromo), modes, emptySet(), 35_000)) // between
-        assertEquals(
-            selfPromo,
-            skipButtonFor(listOf(sponsor, selfPromo), modes, emptySet(), 45_000),
-        )
-        // Inside an Auto segment without undo: it jumped already, no button.
-        assertNull(skipButtonFor(listOf(sponsor, selfPromo), modes, emptySet(), 10_000))
-        // Undo jumped back in: the button offers it again.
-        assertEquals(
-            sponsor,
-            skipButtonFor(listOf(sponsor, selfPromo), modes, setOf(sponsor), 10_000),
-        )
+    fun `the button shows inside any enabled segment`() {
+        assertNull(skipButtonFor(listOf(sponsor, selfPromo), modes, 35_000)) // between
+        assertEquals(selfPromo, skipButtonFor(listOf(sponsor, selfPromo), modes, 45_000))
+        // Inside an Auto segment means a seek, resume or Undo put the
+        // playhead there (playback alone would have jumped it): offer it.
+        assertEquals(sponsor, skipButtonFor(listOf(sponsor, selfPromo), modes, 10_000))
+        // A category switched off mid-video offers nothing.
+        assertNull(skipButtonFor(listOf(sponsor), modes + (SegmentCategory.Sponsor to SkipMode.Off), 10_000))
+    }
+
+    @Test
+    fun `undo restores to the start of the skipped segment`() {
+        val notice = SkipNotice(sponsor)
+        assertEquals(sponsor.startMs, notice.restoreMs)
+        assertEquals("sponsor", notice.label)
     }
 
     @Test
@@ -195,13 +193,8 @@ class SkipSegmentsTest {
     }
 
     @Test
-    fun `on looks up only the wanted categories`() {
-        val (id, wanted) = segmentLookupFor(videoWithId(), SegmentSettings(enabled = true))!!
-        assertEquals("aBcDeF12345", id)
-        assertEquals(
-            setOf(SegmentCategory.Sponsor, SegmentCategory.SelfPromo, SegmentCategory.Interaction),
-            wanted.toSet(),
-        )
+    fun `on looks up the id from the file name`() {
+        assertEquals("aBcDeF12345", segmentLookupFor(videoWithId(), SegmentSettings(enabled = true)))
     }
 
     @Test

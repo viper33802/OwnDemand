@@ -76,6 +76,11 @@ Behaviour (built 2026-10-19):
   (no channel play, previous / next, chapters, PiP or background audio
   yet). Retake the screenshots from the mock server with simulated data
   only.
+- Large text sizes clip player labels (seen on a tablet at a raised
+  text size): the "Skipped sponsor · Undo" chip cuts "Undo" off (a fixed
+  40 dp button box, and no gap after the label), and the quality label in
+  the player's top bar shows "Aut" instead of "Auto". Let both grow with
+  the text size.
 
 ## Chunk 6 — Android TV · review first, then large
 
@@ -212,6 +217,22 @@ background/PiP skip on a real device, the SponsorBlock credit in
 Settings → Open-source licences and NOTICE, and the AGENTS/README
 wording for the scope change.
 
+**Review fixes (2026-10-21):** the skip button now shows whenever the
+playhead is inside an enabled segment, not only while the controls are up
+(they hide after 3 s); seeking or resuming into an Auto segment offers the
+button, as planned; an Auto segment is skipped again after a seek back
+(only Undo leaves it alone); settings changed mid-video apply at once (the
+lookup asks for every category so no second request is needed); the Undo
+chip times out in the player, so a skip in the background never offers a
+stale Undo later; the setting text no longer says "nothing is ever sent".
+Emulator: auto skip, re-skip after a seek back, Undo, the button with
+controls hidden, and mid-video setting changes all checked. On the
+emulator a seek to one segment end left the goldfish H.264 decoder stuck
+"buffering" (the one-shot re-seek did not clear it; a seek elsewhere did).
+The same skip on a real tablet (hardware H.264, release build) jumped and
+kept playing, so it is an emulator decoder fault. Clipped Undo chip at
+large text sizes: see Chunk 5.
+
 ### Finding each video
 
 - **The source id comes from the file name.** Youtarr names files with
@@ -266,8 +287,9 @@ a constraint on any future paid distribution.
 - **Skip automatically:** when playback reaches a segment's start it
   jumps to the end, and a "Skipped sponsor · Undo" chip shows for 5 s
   (Undo jumps back and leaves that segment alone for this viewing).
-- **Show a skip button:** a "Skip self-promotion ›" button sits above
-  the bar's right end while inside the segment.
+- **Show a skip button:** a "Skip self-promotion ›" button sits at the
+  player's bottom right (above the bar while the controls are up) while
+  inside the segment, controls up or not.
 - **Seeking into a segment never auto-skips** (you chose to be there);
   the skip button appears instead.
 - **Edges:** segments under 1 s are ignored; one ending within 1 s of the

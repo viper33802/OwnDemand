@@ -28,18 +28,21 @@ class SegmentClient {
         .callTimeout(5, TimeUnit.SECONDS)
         .build()
 
-    /** Segments of exactly this video id; empty on any failure. */
-    suspend fun lookup(videoId: String, wanted: List<SegmentCategory>): List<SkipSegment> =
+    /**
+     * Segments of exactly this video id, every category (the player decides
+     * which to act on, so a category changed mid-video needs no new
+     * request); empty on any failure.
+     */
+    suspend fun lookup(videoId: String): List<SkipSegment> =
         withContext(Dispatchers.IO) {
-            if (wanted.isEmpty()) return@withContext emptyList()
-            val categories = wanted.joinToString(",", "[", "]") { "\"${it.wire}\"" }
+            val categories = SegmentCategory.entries.joinToString(",", "[", "]") { "\"${it.wire}\"" }
             val url = HOST + "/api/skipSegments/" + hashPrefix(videoId) +
                 "?categories=" + URLEncoder.encode(categories, "UTF-8")
             try {
                 http.newCall(Request.Builder().url(url).build()).execute().use { response ->
                     // 404 simply means "no segments for this hash prefix".
                     if (!response.isSuccessful) return@use emptyList<SkipSegment>()
-                    segmentsFor(response.body.string(), videoId, wanted.toSet())
+                    segmentsFor(response.body.string(), videoId, SegmentCategory.entries.toSet())
                 }
             } catch (e: Exception) {
                 emptyList()

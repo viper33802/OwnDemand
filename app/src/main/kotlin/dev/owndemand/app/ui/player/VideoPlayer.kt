@@ -421,29 +421,63 @@ fun VideoPlayer(
         // autoplay "Up next" countdown), inline and fullscreen alike.
         overlay?.invoke(this)
 
-        // Skip segments (Chunk 10): "Skipped sponsor · Undo" for 5 s after
-        // an automatic jump; Undo goes back and leaves the stretch alone.
+        // Skip segments (Chunk 10): the "Skip …" button while inside a
+        // segment, shown whether or not the controls are up (they hide
+        // after 3 s, long before most segments end) …
+        if (!scrubbing) {
+            manager.skipButtonTarget(positionMs)?.let { target ->
+                SkipSegmentButton(target, controlsVisible, fullscreen) { manager.skipNow(target) }
+            }
+        }
+        // … and "Skipped sponsor · Undo" for 5 s after an automatic jump;
+        // Undo goes back and leaves the stretch alone.
         SkipUndoChip(manager)
     }
 }
 
-/** The 5-second Undo chip after an automatic skip. */
+/**
+ * "Skip self-promotion ›" at the player's bottom right: just above the bar
+ * while the controls are up, lower while they are hidden.
+ */
+@Composable
+private fun BoxScope.SkipSegmentButton(
+    target: dev.owndemand.app.playback.SkipSegment,
+    controlsVisible: Boolean,
+    fullscreen: Boolean,
+    onSkip: () -> Unit,
+) {
+    Row(
+        Modifier
+            .align(Alignment.BottomEnd)
+            .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
+            .padding(
+                end = 12.dp,
+                // Clear of the bar (lifted 14 dp more in fullscreen).
+                bottom = when {
+                    !controlsVisible -> 16.dp
+                    fullscreen -> 60.dp
+                    else -> 46.dp
+                },
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable(onClick = onSkip)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            "Skip ${target.category.label}  ›",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** The Undo chip while the manager offers it (5 s after an automatic skip). */
 @Composable
 private fun BoxScope.SkipUndoChip(manager: PlaybackManager) {
-    val notice by manager.skipNotice.collectAsStateWithLifecycle()
-    var shown by remember { mutableStateOf<dev.owndemand.app.playback.SkipNotice?>(null) }
-    LaunchedEffect(notice) {
-        val n = notice
-        if (n != null) {
-            shown = n
-            kotlinx.coroutines.delay(5_000)
-            shown = null
-            manager.clearSkipNotice(n)
-        } else {
-            shown = null
-        }
-    }
-    val chip = shown ?: return
+    val chip by manager.skipNotice.collectAsStateWithLifecycle()
+    val notice = chip ?: return
     Row(
         Modifier
             .align(Alignment.BottomCenter)
@@ -453,9 +487,9 @@ private fun BoxScope.SkipUndoChip(manager: PlaybackManager) {
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Skipped ${chip.label}", color = Color.White, fontSize = 13.sp)
+        Text("Skipped ${notice.label}", color = Color.White, fontSize = 13.sp)
         IconButton(
-            onClick = { manager.undoSkip(); shown = null },
+            onClick = { manager.undoSkip() },
             modifier = Modifier.size(40.dp),
         ) {
             Text(
@@ -683,29 +717,6 @@ private fun PlayerControls(
                     }
                 }
                 IconControl(R.drawable.ic_expand, "Fullscreen", onToggleFullscreen)
-            }
-
-            // Skip segments (Chunk 10): the "Skip …" button above the bar's
-            // right end while a Button category plays — or while an
-            // Undo-skipped stretch replays, so the choice is yours twice.
-            val skipTarget = manager.skipButtonTarget(positionMs)
-            if (skipTarget != null) {
-                Row(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 46.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .clickable { manager.skipNow(skipTarget) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                ) {
-                    Text(
-                        "Skip ${skipTarget.category.label}  ›",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
             }
         }
     }
