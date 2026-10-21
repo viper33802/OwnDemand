@@ -72,6 +72,10 @@ Behaviour (built 2026-10-19):
   player controls.
 - Opt-in "new version available" notice from GitHub Releases — off by
   default, so the app still contacts nothing but Plex unless enabled.
+- README refresh: the feature list and screenshots are out of date
+  (no channel play, previous / next, chapters, PiP or background audio
+  yet). Retake the screenshots from the mock server with simulated data
+  only.
 
 ## Chunk 6 — Android TV · review first, then large
 
