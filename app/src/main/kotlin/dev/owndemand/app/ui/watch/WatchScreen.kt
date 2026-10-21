@@ -58,7 +58,7 @@ import dev.owndemand.app.ui.LocalLayoutMode
 import dev.owndemand.app.ui.browse.FeedCard
 import dev.owndemand.app.ui.common.displayTitle
 import dev.owndemand.app.ui.common.findActivity
-import dev.owndemand.app.ui.common.formatAddedAt
+import dev.owndemand.app.ui.common.formatUploadDate
 import dev.owndemand.app.ui.common.formatDuration
 import dev.owndemand.app.ui.containerViewModel
 import dev.owndemand.app.ui.isTablet
@@ -447,7 +447,7 @@ private fun DescriptionCard(
             }
             Text(
                 listOfNotNull(
-                    formatAddedAt(item.addedAt).takeIf { it.isNotBlank() },
+                    formatUploadDate(item).takeIf { it.isNotBlank() },
                     formatDuration(item.duration),
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,

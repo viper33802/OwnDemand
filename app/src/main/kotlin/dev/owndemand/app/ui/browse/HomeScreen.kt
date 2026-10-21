@@ -61,7 +61,7 @@ import dev.owndemand.app.ui.browseColumns
 import dev.owndemand.app.ui.common.BrandWordmark
 import dev.owndemand.app.ui.common.displayTitle
 import dev.owndemand.app.ui.rowCardWidth
-import dev.owndemand.app.ui.common.formatAddedAt
+import dev.owndemand.app.ui.common.formatUploadDate
 import dev.owndemand.app.ui.common.formatDuration
 
 /**
@@ -352,7 +352,7 @@ fun FeedCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    listOfNotNull(item.channelName, formatAddedAt(item.addedAt))
+                    listOfNotNull(item.channelName, formatUploadDate(item))
                         .filter { it.isNotBlank() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

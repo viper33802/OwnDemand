@@ -183,6 +183,12 @@ double-tap ±10 s stays.
 about a third of the videos. That could start the autoplay countdown at
 the credits instead of the very end — a separate idea to decide later.
 
+**Also in this PR: upload dates** (user choice 2026-10-20). Every video
+carries its upload date (`originallyAvailableAt`). Cards and the line
+under the title show it instead of the date added, and the channel page's
+Newest / Oldest sort uses it (like Play a channel). Home's sort and the
+New badges stay on the date added (new *to the library*).
+
 **Tests:** unit tests for reading chapters (zero-length skipped, sorted,
 current chapter at a position, scrubber gap positions) and for finding
 timestamps in descriptions. Emulator: a video with many chapters and one

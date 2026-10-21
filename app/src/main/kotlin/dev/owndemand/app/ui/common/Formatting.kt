@@ -35,6 +35,15 @@ fun formatDuration(ms: Long): String {
 }
 
 /** "Mar 4, 2026" from a unix-seconds timestamp; "" when absent. */
+/**
+ * The date shown for a video: when it was uploaded (user choice
+ * 2026-10-20), else when it was added to the library.
+ */
+fun formatUploadDate(item: dev.owndemand.app.data.plex.dto.ItemDto): String =
+    item.uploadDate
+        ?.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM))
+        ?: formatAddedAt(item.addedAt)
+
 fun formatAddedAt(unixSeconds: Long): String =
     if (unixSeconds <= 0) "" else
         java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)

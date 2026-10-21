@@ -49,6 +49,10 @@ data class ItemDto(
 
     /** Finished: watched at least once and not sitting mid-stream. */
     val isFullyWatched: Boolean get() = viewCount > 0 && !isPartiallyWatched
+
+    /** The video's original upload date (`originallyAvailableAt`), if Plex has one. */
+    val uploadDate: java.time.LocalDate?
+        get() = runCatching { java.time.LocalDate.parse(originallyAvailableAt.take(10)) }.getOrNull()
 }
 
 @Serializable

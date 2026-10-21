@@ -29,11 +29,8 @@ data class PlayQueue(
  * (`originallyAvailableAt`, `yyyy-MM-dd`), else when it was added to the
  * library. Epoch seconds.
  */
-fun publishedAt(item: ItemDto): Long {
-    val date = item.originallyAvailableAt.take(10)
-    val day = runCatching { java.time.LocalDate.parse(date).toEpochDay() }.getOrNull()
-    return day?.let { it * 86_400L } ?: item.addedAt
-}
+fun publishedAt(item: ItemDto): Long =
+    item.uploadDate?.toEpochDay()?.let { it * 86_400L } ?: item.addedAt
 
 /** The channel's videos in [order]; shuffle is a fresh random order each time. */
 fun orderChannel(
