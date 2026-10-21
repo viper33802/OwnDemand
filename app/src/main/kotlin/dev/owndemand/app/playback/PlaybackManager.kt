@@ -106,6 +106,173 @@ class PlaybackManager(
     @Volatile
     var autoplayEnabled: Boolean = true
 
+    // ---- Skip segments (Chunk 10) ----
+
+    /**
+     * The SponsorBlock client; only ever asked while
+     * [segmentSettings].enabled is on (AppContainer wires it).
+     */
+    @Volatile
+    var segmentClient: dev.owndemand.app.data.segments.SegmentClient? = null
+
+    /** The Skip segments setting, pushed from Settings. */
+    @Volatile
+    private var segmentSettings: SegmentSettings = SegmentSettings()
+
+    /**
+     * Apply a changed Skip segments setting to the video that is playing:
+     * switching on looks it up now, a category change redraws the marks and
+     * redoes the schedule, switching off drops everything loaded.
+     */
+    fun applySegmentSettings(settings: SegmentSettings) {
+        if (settings == segmentSettings) return
+        segmentSettings = settings
+        if (!settings.enabled) {
+            clearSkipState()
+            return
+        }
+        val item = _currentItem.value ?: return
+        if (segmentsFetchedFor != null) refreshSkipSegments(item) else maybeFetchSegments(item)
+    }
+
+    private val _skipSegments = MutableStateFlow<List<SkipSegment>>(emptyList())
+
+    /** The current video's segments (enabled categories only), for the scrubber. */
+    val skipSegments: StateFlow<List<SkipSegment>> = _skipSegments.asStateFlow()
+
+    private val _skipNotice = MutableStateFlow<SkipNotice?>(null)
+
+    /**
+     * "Skipped sponsor · Undo", set after an automatic jump for
+     * [SKIP_NOTICE_MS] — timed here, not by the chip, so a skip in the
+     * background or picture-in-picture never offers a stale Undo later.
+     */
+    val skipNotice: StateFlow<SkipNotice?> = _skipNotice.asStateFlow()
+
+    private var skipNoticeJob: Job? = null
+
+    /** Every category of the current video, as looked up. */
+    private var fetchedSegments: List<SkipSegment> = emptyList()
+
+    /** Segments Undo brought back: this viewing leaves them alone. */
+    private val undoneSkips = mutableSetOf<SkipSegment>()
+
+    /** Source id already looked up this video (quality / address restarts don't re-ask). */
+    private var segmentsFetchedFor: String? = null
+
+    private var segmentJob: Job? = null
+
+    private fun clearSkipState() {
+        segmentJob?.cancel()
+        segmentJob = null
+        cancelSkipMessages()
+        skipNoticeJob?.cancel()
+        _skipSegments.value = emptyList()
+        _skipNotice.value = null
+        fetchedSegments = emptyList()
+        undoneSkips.clear()
+        segmentsFetchedFor = null
+    }
+
+    /**
+     * Look segments up once per video, in parallel with the stream (no id
+     * in the file name, no lookup; any failure, no segments). Then schedule
+     * the jump-over segments — one player message each, so there is no
+     * polling loop.
+     */
+    private fun maybeFetchSegments(item: ItemDto) {
+        val videoId = segmentLookupFor(item, segmentSettings) ?: return
+        if (segmentsFetchedFor == videoId) {
+            // Same video restarting (quality / address change): the new
+            // media item dropped the old messages; schedule them again.
+            refreshSkipSegments(item)
+            return
+        }
+        val client = segmentClient ?: return
+        val forKey = item.ratingKey
+        segmentJob?.cancel()
+        segmentJob = scope.launch {
+            val fetched = runCatching { client.lookup(videoId) }
+                .getOrElse {
+                    android.util.Log.w("OwnDemand", "segment lookup failed", it)
+                    emptyList()
+                }
+            // Still the same video, and still wanted?
+            if (_currentItem.value?.ratingKey != forKey || !segmentSettings.enabled) return@launch
+            segmentsFetchedFor = videoId
+            fetchedSegments = fetched
+            refreshSkipSegments(item)
+            android.util.Log.i(
+                "OwnDemand",
+                "skip segments: ${fetched.size} found, ${_skipSegments.value.size} enabled",
+            )
+        }
+    }
+
+    /** Marks and schedule from what was looked up, under the current modes. */
+    private fun refreshSkipSegments(item: ItemDto) {
+        val duration = if (player.duration > 0) player.duration else item.duration
+        _skipSegments.value = visibleSegments(fetchedSegments, segmentSettings.modes, duration)
+        scheduleAutoSkips()
+    }
+
+    /** Deliver each jump-over segment at its start, while its video plays. */
+    private val skipMessages = mutableListOf<androidx.media3.exoplayer.PlayerMessage>()
+
+    private fun cancelSkipMessages() {
+        skipMessages.forEach { runCatching { it.cancel() } }
+        skipMessages.clear()
+    }
+
+    private fun scheduleAutoSkips() {
+        cancelSkipMessages()
+        autoSkipTargets(_skipSegments.value, segmentSettings.modes, undoneSkips).forEach { seg ->
+            skipMessages += player.createMessage { _, _ -> autoSkipNow(seg) }
+                .setPosition(seg.startMs)
+                // Kept after delivery: a seek back before the segment
+                // brings it round again, and it is skipped again.
+                .setDeleteAfterDelivery(false)
+                .setLooper(android.os.Looper.getMainLooper())
+                .send()
+        }
+    }
+
+    /** Playback reached a jump-over segment's start: jump it, offer Undo. */
+    private fun autoSkipNow(seg: SkipSegment) {
+        if (seg in undoneSkips || seg !in _skipSegments.value) return
+        if (staleAutoSkip(seg, player.currentPosition)) return
+        player.seekTo(seg.endMs)
+        val notice = SkipNotice(seg)
+        _skipNotice.value = notice
+        skipNoticeJob?.cancel()
+        skipNoticeJob = scope.launch {
+            delay(SKIP_NOTICE_MS)
+            if (_skipNotice.value == notice) _skipNotice.value = null
+        }
+        android.util.Log.i(
+            "OwnDemand",
+            "skipped ${seg.category.wire} ${(seg.endMs - seg.startMs) / 1000}s",
+        )
+    }
+
+    /** The segment with a live "Skip …" button now (see [skipButtonFor]). */
+    fun skipButtonTarget(positionMs: Long): SkipSegment? =
+        skipButtonFor(_skipSegments.value, segmentSettings.modes, positionMs)
+
+    /** The "Skip …" button: jump to the segment's end. */
+    fun skipNow(seg: SkipSegment) {
+        player.seekTo(seg.endMs)
+    }
+
+    /** "Undo": jump back into the skipped stretch and leave it alone this viewing. */
+    fun undoSkip() {
+        val notice = _skipNotice.value ?: return
+        _skipNotice.value = null
+        skipNoticeJob?.cancel()
+        undoneSkips += notice.segment
+        player.seekTo(notice.restoreMs)
+    }
+
     /** Settings cap changed (setting edited, or Wi-Fi <-> mobile data). */
     fun setQuality(newQuality: dev.owndemand.app.domain.VideoQuality) {
         val before = quality
@@ -357,8 +524,13 @@ class PlaybackManager(
         // Playing a video outside the channel being played ends that queue.
         _queue.value?.let { if (item.ratingKey !in it.keys) _queue.value = null }
         // The in-player quality choice is per video: a different video
-        // starts on the Settings cap again.
-        if (_currentItem.value?.ratingKey != item.ratingKey) _qualityOverride.value = null
+        // starts on the Settings cap again. Segments belong to the video,
+        // not the restart: a different video clears them, the same video
+        // (address / quality change) keeps them.
+        if (_currentItem.value?.ratingKey != item.ratingKey) {
+            _qualityOverride.value = null
+            clearSkipState()
+        }
         // Switching away from another video: save where it was left, and
         // remember it for "previous" (unless previous is what brought us here).
         _currentItem.value?.let { previous ->
@@ -425,6 +597,7 @@ class PlaybackManager(
         player.playWhenReady = true
         _wantsToPlay.value = true
         report("buffering")
+        maybeFetchSegments(item)
     }
 
     /** False only while "previous" plays a video from the history. */
@@ -661,6 +834,7 @@ class PlaybackManager(
         _reconnecting.value = false
         previewPartId = null
         _bifIndex.value = null
+        clearSkipState()
     }
 
     private fun startTimelineLoop() {

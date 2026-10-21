@@ -11,6 +11,13 @@ stored in the user's own Plex Media Server library.
 - The app only ever connects to the user's own Plex server (and plex.tv for
   sign-in and server discovery). It has no backend and no third-party
   services of its own.
+- **One opt-in exception:** the *Skip segments* setting, off by default,
+  sends a read-only lookup to SponsorBlock (`sponsor.ajay.app`) as each
+  video starts — only the first 4 hex characters of a SHA-256 hash of the
+  source video id, from its own HTTP client with no Plex token, headers,
+  server address, or device or account details. Keep it that way: no
+  submitting or voting, no user id, no other new service without explicit
+  approval.
 - Not affiliated with or endorsed by Plex, Inc.
 
 **Naming policy:** the source video platform and its feature brands must
@@ -111,6 +118,10 @@ Tablet layouts are described in `docs/TABLET-PLAN.md`; player anatomy in
   database ever becomes necessary, document its purpose and contents.
 - New dependencies must have an Apache-2.0-compatible licence and be added
   to `NOTICE` (and its bundled asset copy, see `docs/RELEASING.md`).
+- SponsorBlock data (Skip segments) is CC BY-NC-SA 4.0: it is fetched at
+  run time, never bundled, and credited with SponsorBlock's attribution
+  text in the setting and in `NOTICE`. It rules out commercial
+  distribution while the feature is in the app.
 
 ---
 
@@ -126,7 +137,8 @@ Tablet layouts are described in `docs/TABLET-PLAN.md`; player anatomy in
 - Never log tokens or full server URLs; never show tokens in the UI,
   screenshots, example configuration, or diagnostics.
 - Never transmit Plex credentials to any service other than plex.tv and the
-  user's own server.
+  user's own server. The SponsorBlock client (`data/segments/`) must stay
+  separate from the Plex HTTP clients and send nothing Plex-related.
 - Handle sign-out and credential removal safely.
 
 ---

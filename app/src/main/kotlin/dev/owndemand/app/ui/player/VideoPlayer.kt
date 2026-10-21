@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
@@ -99,6 +100,7 @@ fun VideoPlayer(
     val player = manager.player
     val isBuffering by manager.isBuffering.collectAsStateWithLifecycle()
     val reconnecting by manager.reconnecting.collectAsStateWithLifecycle()
+    val skipSegments by manager.skipSegments.collectAsStateWithLifecycle()
 
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -402,6 +404,7 @@ fun VideoPlayer(
                 },
                 previewUrlFor = { manager.previewUrl(it) },
                 previewFrameFor = { manager.previewFrame(it) },
+                skipSegments = skipSegments,
                 onOpenChapters = onOpenChapters?.let { open ->
                     {
                         open()
@@ -417,6 +420,85 @@ fun VideoPlayer(
         // Screen-provided overlay on top of everything (Chunk 3: the
         // autoplay "Up next" countdown), inline and fullscreen alike.
         overlay?.invoke(this)
+
+        // Skip segments (Chunk 10): the "Skip …" button while inside a
+        // segment, shown whether or not the controls are up (they hide
+        // after 3 s, long before most segments end) …
+        if (!scrubbing) {
+            manager.skipButtonTarget(positionMs)?.let { target ->
+                SkipSegmentButton(target, controlsVisible, fullscreen) { manager.skipNow(target) }
+            }
+        }
+        // … and "Skipped sponsor · Undo" for 5 s after an automatic jump;
+        // Undo goes back and leaves the stretch alone.
+        SkipUndoChip(manager)
+    }
+}
+
+/**
+ * "Skip self-promotion ›" at the player's bottom right: just above the bar
+ * while the controls are up, lower while they are hidden.
+ */
+@Composable
+private fun BoxScope.SkipSegmentButton(
+    target: dev.owndemand.app.playback.SkipSegment,
+    controlsVisible: Boolean,
+    fullscreen: Boolean,
+    onSkip: () -> Unit,
+) {
+    Row(
+        Modifier
+            .align(Alignment.BottomEnd)
+            .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
+            .padding(
+                end = 12.dp,
+                // Clear of the bar (lifted 14 dp more in fullscreen).
+                bottom = when {
+                    !controlsVisible -> 16.dp
+                    fullscreen -> 60.dp
+                    else -> 46.dp
+                },
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable(onClick = onSkip)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            "Skip ${target.category.label}  ›",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** The Undo chip while the manager offers it (5 s after an automatic skip). */
+@Composable
+private fun BoxScope.SkipUndoChip(manager: PlaybackManager) {
+    val chip by manager.skipNotice.collectAsStateWithLifecycle()
+    val notice = chip ?: return
+    Row(
+        Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 76.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.75f))
+            .padding(start = 14.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Skipped ${notice.label}", color = Color.White, fontSize = 13.sp)
+        IconButton(
+            onClick = { manager.undoSkip() },
+            modifier = Modifier.size(40.dp),
+        ) {
+            Text(
+                "Undo",
+                color = Color(0xFFA78BFA),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 
@@ -454,6 +536,7 @@ private fun PlayerControls(
     onScrubEnd: (Long) -> Unit,
     previewUrlFor: ((Long) -> String?)?,
     previewFrameFor: ((Long) -> ByteArray?)?,
+    skipSegments: List<dev.owndemand.app.playback.SkipSegment>,
     onOpenChapters: (() -> Unit)?,
     onToggleFullscreen: () -> Unit,
 ) {
@@ -583,6 +666,7 @@ private fun PlayerControls(
                 previewUrlFor = previewUrlFor,
                 previewFrameFor = previewFrameFor,
                 chapters = chapters,
+                skipSegments = skipSegments,
                 onTapInWindow = { tap ->
                     val bounds = chapterTitleBounds
                     if (onOpenChapters != null && bounds != null && bounds.inflate(24f).contains(tap)) {
@@ -784,6 +868,7 @@ private fun Scrubber(
     previewUrlFor: ((Long) -> String?)? = null,
     previewFrameFor: ((Long) -> ByteArray?)? = null,
     chapters: List<dev.owndemand.app.playback.VideoChapter> = emptyList(),
+    skipSegments: List<dev.owndemand.app.playback.SkipSegment> = emptyList(),
     /** A plain tap on the band, in window coordinates (opens chapters). */
     onTapInWindow: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -861,6 +946,21 @@ private fun Scrubber(
                 bar(right, Color.White.copy(alpha = 0.35f))
                 bar(buffered, Color.White.copy(alpha = 0.55f))
                 bar(played, Color(0xFFA78BFA))
+            }
+            // Skip segments (Chunk 10): each marked stretch in its category
+            // colour, over the chapter segments.
+            if (durationMs > 0) {
+                for (seg in skipSegments) {
+                    val left = (seg.startMs.toFloat() / durationMs).coerceIn(0f, 1f) * w
+                    val right = (seg.endMs.toFloat() / durationMs).coerceIn(0f, 1f) * w
+                    if (right > left) {
+                        drawRect(
+                            skipSegmentColor(seg.category),
+                            androidx.compose.ui.geometry.Offset(left, 0f),
+                            androidx.compose.ui.geometry.Size(right - left, size.height),
+                        )
+                    }
+                }
             }
         }
         val thumbSize = if (scrubbing) 14.dp else 8.dp
@@ -1071,3 +1171,16 @@ private fun MenuHeader(text: String) {
 private fun MenuChoice(label: String, selected: Boolean) {
     Text(if (selected) "✓  $label" else "    $label")
 }
+
+/** Scrubber colours per segment category (service-palette-inspired). */
+private fun skipSegmentColor(category: dev.owndemand.app.playback.SegmentCategory): Color =
+    when (category) {
+        dev.owndemand.app.playback.SegmentCategory.Sponsor -> Color(0xFF00D400)
+        dev.owndemand.app.playback.SegmentCategory.SelfPromo -> Color(0xFF008FD6)
+        dev.owndemand.app.playback.SegmentCategory.Interaction -> Color(0xFFB0BEC5)
+        dev.owndemand.app.playback.SegmentCategory.Intro -> Color(0xFF00BCD4)
+        dev.owndemand.app.playback.SegmentCategory.Outro -> Color(0xFFFF9800)
+        dev.owndemand.app.playback.SegmentCategory.Preview -> Color(0xFFE91E63)
+        dev.owndemand.app.playback.SegmentCategory.Filler -> Color(0xFF8D6E63)
+        dev.owndemand.app.playback.SegmentCategory.MusicOffTopic -> Color(0xFF009688)
+    }

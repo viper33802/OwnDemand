@@ -12,8 +12,8 @@ android {
         applicationId = "dev.owndemand.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.3.2"
+        versionCode = 7
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
