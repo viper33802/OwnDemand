@@ -201,7 +201,7 @@ timestamps in descriptions. Emulator: a video with many chapters and one
 without; scrubbing across chapters; the list in phone, fullscreen and
 tablet layouts; tapping a description timestamp.
 
-## Chunk 10 — Skip segments (SponsorBlock) · done on `main`, not yet released
+## Chunk 10 — Skip segments (SponsorBlock) · shipped in 0.4.0
 
 Planned 2026-10-21; the owner approved the scope change (the one opt-in
 exception to "contacts nothing but Plex") the same day and the POC is
@@ -223,8 +223,7 @@ Features, Security & privacy, Licence) and AGENTS.md §1/§14 describe the
 opt-in exception. On the tablet (release build): auto skip in the app,
 in picture-in-picture, and in the background with the screen off all
 jumped the sponsor and kept playing; a video without chapters works the
-same (checked on the emulator). Left: publish (PR + release), with the
-public AGENTS.md given the same scope wording.
+same (checked on the emulator). Shipped in 0.4.0.
 
 **Review fixes (2026-10-21):** the skip button now shows whenever the
 playhead is inside an enabled segment, not only while the controls are up
