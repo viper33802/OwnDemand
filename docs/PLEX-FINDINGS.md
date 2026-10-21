@@ -438,3 +438,20 @@ Verified against the live server while building the Channels/Playlists tabs:
   720p conversion, Media3's `onVideoSizeChanged` can still report
   1920x1080 (decoder reuse). Judge delivered quality by the selected
   track's `Format`, not the decoder output size.
+
+## 17. Chunk 9: chapters (2026-10-20)
+
+Verified read-only against the live server.
+
+- **Embedded chapters** come back only when asked for:
+  `/library/metadata/{id}?includeChapters=1` adds a `Chapter` array with
+  `tag` (title), `index`, `startTimeOffset` / `endTimeOffset` (ms),
+  `thumb` (`/library/media/{id}/chapterImages/{n}`, a Plex-made frame)
+  and `id` / `filter`. The thumbnail loads like any artwork path.
+- In this library about 3 in 10 videos carry chapters (2–34 each), the
+  first always at 0, almost all with real titles; a few are zero-length.
+- Every video whose description lists timestamps ("0:00 Intro …") also
+  has embedded chapters (the downloader embeds them), so descriptions are
+  not needed as a chapter source.
+- `includeMarkers=1` also returns `credits` markers on about a third of
+  the videos (not used yet).

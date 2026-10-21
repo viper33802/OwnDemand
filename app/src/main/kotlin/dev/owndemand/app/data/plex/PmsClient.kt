@@ -104,7 +104,8 @@ class PmsClient(
     /** Full metadata for one item (Media/Part/Stream, summary, viewOffset). */
     suspend fun item(ratingKey: String): ItemDto =
         PlexJson.decodeFromString<MediaContainerResponse>(
-            fetch(pmsUrl("/library/metadata/$ratingKey")),
+            // Chapters come only when asked for (Chunk 9).
+            fetch(pmsUrl("/library/metadata/$ratingKey?includeChapters=1")),
         ).container.Metadata.firstOrNull()
             ?: throw PmsException("Item $ratingKey not found on the server.")
 

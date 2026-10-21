@@ -37,6 +37,8 @@ data class ItemDto(
     val originallyAvailableAt: String = "",
     val Collection: List<TagDto> = emptyList(),
     val Media: List<MediaDto> = emptyList(),
+    /** Chapters embedded in the file (detail requests with includeChapters=1). */
+    val Chapter: List<ChapterDto> = emptyList(),
 ) {
     /** Channel identity = first Collection tag (M1: collections are channels). */
     val channelName: String? get() = Collection.firstOrNull()?.tag
@@ -51,6 +53,19 @@ data class ItemDto(
 
 @Serializable
 data class TagDto(val tag: String = "")
+
+/**
+ * One embedded chapter (Chunk 9): title, start / end in ms, and a
+ * Plex-made thumbnail path (`/library/media/{id}/chapterImages/{n}`).
+ */
+@Serializable
+data class ChapterDto(
+    val tag: String = "",
+    val index: Int = 0,
+    val startTimeOffset: Long = 0,
+    val endTimeOffset: Long = 0,
+    val thumb: String = "",
+)
 
 @Serializable
 data class MediaDto(

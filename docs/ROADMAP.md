@@ -144,6 +144,51 @@ Planned and built 2026-10-19 (user decisions in brackets). Ships as
   inline and fullscreen, phone and tablet layouts, greyed states at the
   start of a session and at the end of a channel.
 
+## Chunk 9 — Chapters · medium
+
+Planned and built 2026-10-20, from a read-only scan of the library.
+
+**What the library has.** Chapters are embedded in the video files and
+Plex returns them with the video (`/library/metadata/{id}?includeChapters=1`):
+a title, start and end time, and a Plex-made thumbnail per chapter
+(`/library/media/{id}/chapterImages/{n}`). About 3 in 10 videos have them,
+2–34 chapters each, nearly all with real titles, the first always at 0:00.
+Every video whose description lists timestamps ("0:00 Intro …") also has
+embedded chapters, so the descriptions are not needed as a source. A few
+chapters are zero-length; those are skipped. Videos without chapters look
+and work exactly as now.
+
+**In the player (the familiar pattern):**
+- **Segmented scrubber.** The progress bar splits into segments with a
+  small gap at each chapter start.
+- **Current chapter by the time.** Bottom left reads
+  "4:12 / 20:32 · *Chapter title* ›". It updates as the video plays;
+  tapping it opens the chapter list.
+- **While scrubbing,** the chapter title shows above the preview frame.
+
+**Chapter list.** A panel listing every chapter with its thumbnail,
+title and start time; the current one is highlighted and tapping one
+jumps there. It opens from the chapter title in the player and from a
+"Chapters" row on the description card. On phones and in fullscreen it
+slides up from the bottom; on the tablet's two-pane screen it takes the
+place of Up next, with an × to go back.
+
+**Description.** Timestamps in a description ("12:34") become tappable
+and jump to that point.
+
+**Unchanged:** previous / next stay whole-video (not chapter) buttons;
+double-tap ±10 s stays.
+
+**Not in this chunk:** Plex also marks where the end credits start on
+about a third of the videos. That could start the autoplay countdown at
+the credits instead of the very end — a separate idea to decide later.
+
+**Tests:** unit tests for reading chapters (zero-length skipped, sorted,
+current chapter at a position, scrubber gap positions) and for finding
+timestamps in descriptions. Emulator: a video with many chapters and one
+without; scrubbing across chapters; the list in phone, fullscreen and
+tablet layouts; tapping a description timestamp.
+
 ## Not planned
 
 Chromecast and offline downloads (large; revisit separately if wanted).
