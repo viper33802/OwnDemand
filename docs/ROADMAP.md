@@ -196,10 +196,21 @@ timestamps in descriptions. Emulator: a video with many chapters and one
 without; scrubbing across chapters; the list in phone, fullscreen and
 tablet layouts; tapping a description timestamp.
 
-## Chunk 10 — Skip segments (SponsorBlock) · review first, medium
+## Chunk 10 — Skip segments (SponsorBlock) · built, POC stage
 
-Planned 2026-10-21; not approved to build yet. It changes the "contacts
-nothing but Plex" rule, so the scope change below needs sign-off first.
+Planned 2026-10-21; the owner approved the scope change (the one opt-in
+exception to "contacts nothing but Plex") the same day and the POC is
+committed on `main` behind the off-by-default setting.
+
+**POC status (2026-10-21):** steps 1–2 done — live API check against the
+owner's library (100 of 150 sampled videos have segments; response shape
+verified: timings come as `segment:[start,end]`), built with 15 unit
+tests, emulator walkthrough (confirm dialog, per-category pickers, auto
+skip + Undo chip + scrubber marks) and a release-signed install on the
+Tab S6. Not yet done: visual check of the "Skip … ›" button and the
+background/PiP skip on a real device, the SponsorBlock credit in
+Settings → Open-source licences and NOTICE, and the AGENTS/README
+wording for the scope change.
 
 ### Finding each video
 
@@ -213,7 +224,7 @@ nothing but Plex" rule, so the scope change below needs sign-off first.
   are added and voted on for days after a video comes out, so a
   download-time snapshot is often incomplete.
 
-### Scope change (needs approval)
+### Scope change (approved 2026-10-21)
 
 AGENTS.md and the README promise the app talks to nothing but Plex. This
 feature adds one opt-in exception, **off by default**: the SponsorBlock

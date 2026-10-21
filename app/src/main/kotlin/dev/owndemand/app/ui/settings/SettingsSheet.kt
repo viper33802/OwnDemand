@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ButtonDefaults
@@ -58,9 +59,16 @@ fun SettingsSheet(
     onPictureInPictureChange: (Boolean) -> Unit,
     onBackgroundPlayChange: (Boolean) -> Unit,
     onFontScaleChange: (Float) -> Unit,
+    onSkipSegmentsChange: (Boolean) -> Unit,
+    onSkipModeChange:
+        (dev.owndemand.app.playback.SegmentCategory, dev.owndemand.app.playback.SkipMode) -> Unit,
 ) {
     var detailsOpen by remember { mutableStateOf(false) }
     var licensesOpen by remember { mutableStateOf(false) }
+    // The one confirmation of the third-party contact, every time the
+    // switch is moved to on (the app's only exception to "nothing but
+    // Plex" — the dialog says exactly what leaves the device).
+    var confirmSkipOn by remember { mutableStateOf(false) }
     Column(
         // readableWidth: at tablet widths the whole page becomes a centred
         // 640 dp column (survey A5); phones are untouched.
@@ -126,6 +134,31 @@ fun SettingsSheet(
             checked = settings.backgroundPlay,
             onCheckedChange = onBackgroundPlayChange,
         )
+
+        // Skip segments (Chunk 10): the app's one opt-in third-party contact,
+        // off by default. Enabling it runs through a confirmation dialog.
+        Spacer(Modifier.height(12.dp))
+        SwitchRow(
+            title = "Skip segments",
+            detail = "Jump over sponsors and other marked stretches. While on, the app asks " +
+                "SponsorBlock (sponsor.ajay.app) for a short hash of the video's source id — " +
+                "never which video, no Plex sign-in, no server address, no device details, " +
+                "and nothing is ever sent. Segment data by SponsorBlock, CC BY-NC-SA.",
+            checked = settings.skipSegments,
+            onCheckedChange = { on ->
+                if (on) confirmSkipOn = true else onSkipSegmentsChange(false)
+            },
+        )
+        if (settings.skipSegments) {
+            Spacer(Modifier.height(8.dp))
+            dev.owndemand.app.playback.SegmentCategory.entries.forEach { category ->
+                SkipModeRow(
+                    label = category.label.replaceFirstChar { it.uppercase() },
+                    mode = settings.skipModes[category]
+                        ?: dev.owndemand.app.playback.SkipMode.Off,
+                ) { onSkipModeChange(category, it) }
+            }
+        }
 
         Spacer(Modifier.height(20.dp))
 
@@ -210,6 +243,72 @@ fun SettingsSheet(
     }
 
     if (licensesOpen) OpenSourceLicensesDialog(onDismiss = { licensesOpen = false })
+
+    if (confirmSkipOn) {
+        AlertDialog(
+            onDismissRequest = { confirmSkipOn = false },
+            title = { Text("Contact SponsorBlock?") },
+            text = {
+                Text(
+                    "So far this app has talked to nothing but Plex. Turning Skip segments on " +
+                        "adds one exception: when a video starts, the app asks SponsorBlock " +
+                    "(sponsor.ajay.app) for the first 4 characters of a hash of the video's " +
+                        "source id. That prefix is shared by thousands of videos, so the " +
+                        "service never learns which video you are watching. No Plex sign-in, " +
+                        "server address or device details are ever sent, and nothing is ever " +
+                        "sent back. You can switch this off again at any time.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmSkipOn = false
+                        onSkipSegmentsChange(true)
+                    },
+                ) { Text("Turn on") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSkipOn = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+/** One segment category: label plus its behaviour, off by default. */
+@Composable
+private fun SkipModeRow(
+    label: String,
+    mode: dev.owndemand.app.playback.SkipMode,
+    onChange: (dev.owndemand.app.playback.SkipMode) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().widthIn(max = 480.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Box {
+            TextButton(onClick = { open = true }) { Text(skipModeLabel(mode)) }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                dev.owndemand.app.playback.SkipMode.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(skipModeLabel(option)) },
+                        onClick = {
+                            onChange(option)
+                            open = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Row text for a category's behaviour. */
+fun skipModeLabel(mode: dev.owndemand.app.playback.SkipMode): String = when (mode) {
+    dev.owndemand.app.playback.SkipMode.Auto -> "Skip automatically"
+    dev.owndemand.app.playback.SkipMode.Button -> "Show a skip button"
+    dev.owndemand.app.playback.SkipMode.Off -> "Off"
 }
 
 /**

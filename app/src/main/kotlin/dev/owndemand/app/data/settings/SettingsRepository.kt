@@ -43,6 +43,15 @@ data class AppSettings(
      * the time. A video shows again once its progress moves on.
      */
     val hiddenContinue: Map<String, Long> = emptyMap(),
+    /**
+     * Skip segments (Chunk 10): off by default. On is the one opt-in
+     * exception to "contacts nothing but Plex" — read-only SponsorBlock
+     * lookups from sponsor.ajay.app by hash prefix (see SegmentClient).
+     */
+    val skipSegments: Boolean = false,
+    /** Per-category behaviour; defaults per the plan when never edited. */
+    val skipModes: Map<dev.owndemand.app.playback.SegmentCategory, dev.owndemand.app.playback.SkipMode> =
+        dev.owndemand.app.playback.defaultSkipModes(),
 ) {
     val isSignedIn: Boolean get() = accountToken != null
     val hasServer: Boolean get() = server != null
@@ -88,6 +97,9 @@ class SettingsRepository(
         val FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("font_scale")
         /** "ratingKey:offsetMs" entries — see [AppSettings.hiddenContinue]. */
         val HIDDEN_CONTINUE = androidx.datastore.preferences.core.stringSetPreferencesKey("hidden_continue_watching")
+        val SKIP_SEGMENTS = androidx.datastore.preferences.core.booleanPreferencesKey("skip_segments")
+        /** "category:Mode" entries — see [AppSettings.skipModes]. */
+        val SKIP_MODES = androidx.datastore.preferences.core.stringSetPreferencesKey("skip_modes")
     }
 
     private val store = context.applicationContext.dataStore
@@ -117,6 +129,8 @@ class SettingsRepository(
                     val key = entry.substringBefore(':')
                     entry.substringAfter(':', "").toLongOrNull()?.let { key to it }
                 }.toMap(),
+                skipSegments = prefs[Keys.SKIP_SEGMENTS] ?: false,
+                skipModes = readSkipModes(prefs[Keys.SKIP_MODES]),
             )
         }
 
@@ -229,6 +243,20 @@ class SettingsRepository(
         prefs[Keys.BACKGROUND_PLAY] = enabled
     }
 
+    /** Skip segments master switch (off by default; see [AppSettings.skipSegments]). */
+    suspend fun setSkipSegments(enabled: Boolean) = store.edit { prefs ->
+        prefs[Keys.SKIP_SEGMENTS] = enabled
+    }
+
+    /** One category's behaviour; the whole map is kept so defaults survive. */
+    suspend fun setSkipMode(
+        category: dev.owndemand.app.playback.SegmentCategory,
+        mode: dev.owndemand.app.playback.SkipMode,
+    ) = store.edit { prefs ->
+        val updated = readSkipModes(prefs[Keys.SKIP_MODES]) + (category to mode)
+        prefs[Keys.SKIP_MODES] = updated.map { (c, m) -> "${c.wire}:${m.name}" }.toSet()
+    }
+
     /** App-wide text-size multiplier; 1f clears it back to the system scale. */
     suspend fun setFontScale(scale: Float) = store.edit { prefs ->
         val clamped = scale.coerceIn(0.85f, 1.5f)
@@ -271,6 +299,20 @@ class SettingsRepository(
         val type = prefs[Keys.LIBRARY_TYPE] ?: return null
         return PlexLibrary(key, uuid, title, type)
     }
+
+    /** Saved "category:Mode" entries, always filled out to every category. */
+    private fun readSkipModes(
+        entries: Set<String>?,
+    ): Map<dev.owndemand.app.playback.SegmentCategory, dev.owndemand.app.playback.SkipMode> =
+        dev.owndemand.app.playback.SegmentCategory.entries.associateWith { cat ->
+            entries?.firstOrNull { it.startsWith("${cat.wire}:") }
+                ?.substringAfter(':')
+                ?.let { saved ->
+                    dev.owndemand.app.playback.SkipMode.entries.firstOrNull { it.name == saved }
+                }
+                ?: dev.owndemand.app.playback.defaultSkipModes()[cat]
+                ?: dev.owndemand.app.playback.SkipMode.Off
+        }
 }
 
 /** First quality settings (see [SettingsRepository.ensureQualitySettings]); pure for tests. */

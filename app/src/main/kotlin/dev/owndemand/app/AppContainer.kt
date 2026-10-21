@@ -126,6 +126,8 @@ class AppContainer(context: Context) {
         playbackManager = manager
         manager.setBackgroundMode(!appVisible || _inPip.value)
         manager.autoplayEnabled = autoplayEnabled
+        manager.segmentClient = segmentClient
+        manager.applySegmentSettings(segmentSettings)
         playbackJob = appScope.launch {
             launch { manager.wantsToPlay.collect { _videoActive.value = it } }
             launch { manager.currentItem.collect { _playingItem.value = it } }
@@ -187,6 +189,23 @@ class AppContainer(context: Context) {
         set(value) {
             field = value
             playbackManager?.autoplayEnabled = value
+        }
+
+    /**
+     * The one third-party contact (SponsorBlock), created but never used
+     * while [segmentSettings] is off — see data/segments/SegmentClient.
+     */
+    val segmentClient: dev.owndemand.app.data.segments.SegmentClient by lazy {
+        dev.owndemand.app.data.segments.SegmentClient()
+    }
+
+    /** The Skip segments setting, pushed from Settings to the player. */
+    @Volatile
+    var segmentSettings: dev.owndemand.app.playback.SegmentSettings =
+        dev.owndemand.app.playback.SegmentSettings()
+        set(value) {
+            field = value
+            playbackManager?.applySegmentSettings(value)
         }
 
     private val _playingItem = kotlinx.coroutines.flow.MutableStateFlow<dev.owndemand.app.data.plex.dto.ItemDto?>(null)

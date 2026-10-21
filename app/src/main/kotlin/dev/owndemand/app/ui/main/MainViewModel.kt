@@ -108,6 +108,13 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 container.autoplayEnabled = s.autoplay
             }
         }
+        // Skip segments (Chunk 10): master switch and per-category modes.
+        viewModelScope.launch {
+            container.settingsRepository.settings.collect { s ->
+                container.segmentSettings =
+                    dev.owndemand.app.playback.SegmentSettings(s.skipSegments, s.skipModes)
+            }
+        }
         // Next / previous / background autoplay change the video outside the
         // UI: an open watch screen follows (keeping fullscreen as it is).
         viewModelScope.launch {
@@ -187,6 +194,19 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setBackgroundPlay(enabled: Boolean) {
         viewModelScope.launch { container.settingsRepository.setBackgroundPlay(enabled) }
+    }
+
+    /** Skip segments master switch; enabling it is confirmed in the UI first. */
+    fun setSkipSegments(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setSkipSegments(enabled) }
+    }
+
+    /** One category's behaviour (skip automatically / show a button / off). */
+    fun setSkipMode(
+        category: dev.owndemand.app.playback.SegmentCategory,
+        mode: dev.owndemand.app.playback.SkipMode,
+    ) {
+        viewModelScope.launch { container.settingsRepository.setSkipMode(category, mode) }
     }
 
     /** App-wide text size, from the Settings slider. */

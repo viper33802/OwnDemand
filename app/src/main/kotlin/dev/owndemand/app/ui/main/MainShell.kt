@@ -292,6 +292,8 @@ private fun ShellContent(
                 onPictureInPictureChange = mainVm::setPictureInPicture,
                 onBackgroundPlayChange = mainVm::setBackgroundPlay,
                 onFontScaleChange = mainVm::setFontScale,
+                onSkipSegmentsChange = mainVm::setSkipSegments,
+                onSkipModeChange = mainVm::setSkipMode,
             )
         }
 
