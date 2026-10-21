@@ -10,7 +10,7 @@ import android.os.Build
  */
 object PlexHeaders {
     const val PRODUCT = "OwnDemand"
-    const val PRODUCT_VERSION = "0.3.1"
+    const val PRODUCT_VERSION = "0.3.2"
 
     fun identification(clientIdentifier: String): Map<String, String> = mapOf(
         "X-Plex-Product" to PRODUCT,

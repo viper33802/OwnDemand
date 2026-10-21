@@ -42,3 +42,6 @@ preview.jpg
 
 # Local archive of files removed from git (kept on disk, never committed)
 /archive/
+
+# Private project notes: library facts, devices, decisions (kept local, never committed)
+/notes/

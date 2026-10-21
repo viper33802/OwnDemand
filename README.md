@@ -51,7 +51,8 @@ accounts, no backend, no analytics, no third-party services.
   oldest first, newest first or shuffled, once through.
 - **Playback-first watch screen** — tap any card and playback starts
   immediately. Expandable description, *Up next*, previous / next,
-  fullscreen, captions, scrub previews, double-tap seek, pinch-to-zoom.
+  chapters (segmented scrubber and a chapter list), fullscreen, captions,
+  scrub previews, double-tap seek, pinch-to-zoom.
 - **Miniplayer** — drag the video down (or switch tabs) and it keeps
   playing in a floating, draggable miniplayer while you browse.
 - **Picture-in-picture and background audio** — leave the app and the

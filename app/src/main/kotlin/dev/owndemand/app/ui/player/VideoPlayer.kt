@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -57,6 +58,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +93,8 @@ fun VideoPlayer(
     onDock: () -> Unit,
     modifier: Modifier = Modifier,
     overlay: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? = null,
+    /** Opens the chapter list (Chunk 9); null hides the way in. */
+    onOpenChapters: (() -> Unit)? = null,
 ) {
     val player = manager.player
     val isBuffering by manager.isBuffering.collectAsStateWithLifecycle()
@@ -397,6 +402,12 @@ fun VideoPlayer(
                 },
                 previewUrlFor = { manager.previewUrl(it) },
                 previewFrameFor = { manager.previewFrame(it) },
+                onOpenChapters = onOpenChapters?.let { open ->
+                    {
+                        open()
+                        interactionTick = System.currentTimeMillis()
+                    }
+                },
                 onToggleFullscreen = {
                     onToggleFullscreen()
                     interactionTick = System.currentTimeMillis()
@@ -443,9 +454,16 @@ private fun PlayerControls(
     onScrubEnd: (Long) -> Unit,
     previewUrlFor: ((Long) -> String?)?,
     previewFrameFor: ((Long) -> ByteArray?)?,
+    onOpenChapters: (() -> Unit)?,
     onToggleFullscreen: () -> Unit,
 ) {
     val hasSubtitles by manager.hasSubtitles.collectAsStateWithLifecycle()
+    val playingItem by manager.currentItem.collectAsStateWithLifecycle()
+    val chapters = remember(playingItem) { dev.owndemand.app.playback.chaptersOf(playingItem) }
+    // Where the chapter title sits on screen: the scrubber band underneath
+    // owns every touch there (so a drag starting on the title still
+    // scrubs), and a plain tap inside these bounds opens the chapter list.
+    var chapterTitleBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val captionsOn by manager.captionsEnabled.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize()) {
         // Full-surface scrim: the whole video darkens while controls show,
@@ -564,6 +582,13 @@ private fun PlayerControls(
                 onScrubEnd = onScrubEnd,
                 previewUrlFor = previewUrlFor,
                 previewFrameFor = previewFrameFor,
+                chapters = chapters,
+                onTapInWindow = { tap ->
+                    val bounds = chapterTitleBounds
+                    if (onOpenChapters != null && bounds != null && bounds.inflate(24f).contains(tap)) {
+                        onOpenChapters()
+                    }
+                },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
             Row(
@@ -582,13 +607,31 @@ private fun PlayerControls(
                     .padding(bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "${formatDuration(positionMs)} / ${formatDuration(durationMs)}",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.weight(1f))
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${formatDuration(positionMs)} / ${formatDuration(durationMs)}",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    // Chunk 9: the chapter playing now; tap → chapter list.
+                    val chapterIndex = dev.owndemand.app.playback.chapterIndexAt(chapters, positionMs)
+                    if (chapterIndex >= 0) {
+                        Text(
+                            "  ·  ${chapters[chapterIndex].title}" + if (onOpenChapters != null) "  ›" else "",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .onGloballyPositioned { chapterTitleBounds = it.boundsInWindow() },
+                        )
+                    } else {
+                        chapterTitleBounds = null
+                    }
+                }
                 IconControl(R.drawable.ic_expand, "Fullscreen", onToggleFullscreen)
             }
         }
@@ -740,8 +783,13 @@ private fun Scrubber(
     onScrubEnd: (Long) -> Unit,
     previewUrlFor: ((Long) -> String?)? = null,
     previewFrameFor: ((Long) -> ByteArray?)? = null,
+    chapters: List<dev.owndemand.app.playback.VideoChapter> = emptyList(),
+    /** A plain tap on the band, in window coordinates (opens chapters). */
+    onTapInWindow: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    var bandCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    val latestOnTap by rememberUpdatedState(onTapInWindow)
     // The drag lambdas live across recompositions (pointerInput key is
     // durationMs), so read the live position through rememberUpdatedState:
     // releasing must seek to the last scrubbed position, not the one
@@ -751,6 +799,13 @@ private fun Scrubber(
         modifier
             .fillMaxWidth()
             .height(ScrubBandHeight)
+            .onGloballyPositioned { bandCoordinates = it }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val coords = bandCoordinates ?: return@detectTapGestures
+                    latestOnTap?.invoke(coords.localToWindow(offset))
+                }
+            }
             .pointerInput(durationMs) {
                 if (durationMs <= 0L) return@pointerInput
                 detectHorizontalDragGestures(
@@ -776,25 +831,37 @@ private fun Scrubber(
         // Track flush with the bottom edge of the touch band, which is the
         // bottom edge of the video (reference: the red bar sits at the
         // very edge, not inside the control row).
-        Box(
+        // Chunk 9: one segment per chapter, split by small gaps (a single
+        // segment when the video has none).
+        val gaps = remember(chapters, durationMs) {
+            dev.owndemand.app.playback.chapterGapFractions(chapters, durationMs)
+        }
+        androidx.compose.foundation.Canvas(
             Modifier
                 .fillMaxWidth()
                 .height(3.dp)
-                .align(Alignment.BottomCenter)
-                .background(Color.White.copy(alpha = 0.35f)),
+                .align(Alignment.BottomCenter),
         ) {
-            Box(
-                Modifier
-                    .fillMaxWidth(bufferedFraction.coerceIn(0f, 1f))
-                    .height(3.dp)
-                    .background(Color.White.copy(alpha = 0.55f)),
-            )
-            Box(
-                Modifier
-                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                    .height(3.dp)
-                    .background(Color(0xFFA78BFA)),
-            )
+            val w = size.width
+            val gapPx = 2.dp.toPx()
+            val edges = listOf(0f) + gaps + 1f
+            val played = fraction.coerceIn(0f, 1f) * w
+            val buffered = bufferedFraction.coerceIn(0f, 1f) * w
+            for (i in 0 until edges.size - 1) {
+                val left = edges[i] * w + if (i > 0) gapPx / 2 else 0f
+                val right = edges[i + 1] * w - if (i < edges.size - 2) gapPx / 2 else 0f
+                if (right <= left) continue
+                fun bar(end: Float, color: Color) {
+                    val e = end.coerceIn(left, right)
+                    if (e > left) {
+                        drawRect(color, androidx.compose.ui.geometry.Offset(left, 0f),
+                            androidx.compose.ui.geometry.Size(e - left, size.height))
+                    }
+                }
+                bar(right, Color.White.copy(alpha = 0.35f))
+                bar(buffered, Color.White.copy(alpha = 0.55f))
+                bar(played, Color(0xFFA78BFA))
+            }
         }
         val thumbSize = if (scrubbing) 14.dp else 8.dp
         Box(
@@ -827,6 +894,10 @@ private fun Scrubber(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
+                    // Measured at its full height (the band is only 56 dp)
+                    // and growing upward from just above the time row, so
+                    // the chapter label, frame and time never overlap it.
+                    .wrapContentHeight(align = Alignment.Bottom, unbounded = true)
                     .offset(
                         x = if (hasVisual) {
                             (trackWidth * fraction - 70.dp)
@@ -835,9 +906,26 @@ private fun Scrubber(
                             (trackWidth * fraction - 24.dp)
                                 .coerceIn(0.dp, (trackWidth - 48.dp).coerceAtLeast(0.dp))
                         },
-                        y = (-46).dp,
+                        y = (-50).dp,
                     ),
             ) {
+                // Chunk 9: the chapter at the scrubbed position.
+                val scrubChapter = dev.owndemand.app.playback.chapterIndexAt(chapters, positionMs)
+                if (scrubChapter >= 0) {
+                    Text(
+                        chapters[scrubChapter].title,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .widthIn(max = 140.dp)
+                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                }
                 if (frameBitmap != null) {
                     Image(
                         bitmap = frameBitmap,

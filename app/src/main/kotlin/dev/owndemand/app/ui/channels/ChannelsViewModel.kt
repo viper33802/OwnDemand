@@ -164,10 +164,15 @@ class ChannelDetailViewModel(
     }
 }
 
-/** Channel sort orders. Mixed is Home-only; here it means newest first. */
+/**
+ * Channel sort orders. Mixed is Home-only; here it means newest first.
+ * Newest / oldest go by upload date, like playing the channel (user choice
+ * 2026-10-20); Home keeps the date added.
+ */
 fun sortChannelVideos(items: List<ItemDto>, sort: HomeSort): List<ItemDto> = when (sort) {
-    HomeSort.Oldest -> items.sortedBy { it.addedAt }
+    HomeSort.Oldest -> dev.owndemand.app.playback.orderChannel(items, dev.owndemand.app.playback.ChannelOrder.OldestFirst)
     HomeSort.TitleAsc -> items.sortedBy { it.title.lowercase() }
     HomeSort.DurationDesc -> items.sortedByDescending { it.duration }
-    HomeSort.Newest, HomeSort.Mixed -> items.sortedByDescending { it.addedAt }
+    HomeSort.Newest, HomeSort.Mixed ->
+        dev.owndemand.app.playback.orderChannel(items, dev.owndemand.app.playback.ChannelOrder.NewestFirst)
 }

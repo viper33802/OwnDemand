@@ -1,5 +1,11 @@
 package dev.owndemand.app.ui.watch
 
+import dev.owndemand.app.playback.chaptersOf
+import dev.owndemand.app.playback.chapterIndexAt
+import dev.owndemand.app.playback.descriptionTimestamps
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.foundation.layout.navigationBarsPadding
 import dev.owndemand.app.playback.queueNextKey
 import dev.owndemand.app.playback.queueRemaining
 import android.content.pm.ActivityInfo
@@ -52,7 +58,7 @@ import dev.owndemand.app.ui.LocalLayoutMode
 import dev.owndemand.app.ui.browse.FeedCard
 import dev.owndemand.app.ui.common.displayTitle
 import dev.owndemand.app.ui.common.findActivity
-import dev.owndemand.app.ui.common.formatAddedAt
+import dev.owndemand.app.ui.common.formatUploadDate
 import dev.owndemand.app.ui.common.formatDuration
 import dev.owndemand.app.ui.containerViewModel
 import dev.owndemand.app.ui.isTablet
@@ -75,6 +81,7 @@ import androidx.compose.ui.draw.clip
  * shell's tab area (bottom menu stays visible, user direction 2026-10-16);
  * fullscreen is hoisted to the shell so it can hide the menu.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun WatchScreen(
     container: AppContainer,
@@ -251,6 +258,48 @@ fun WatchScreen(
     val current = item ?: return
     val artworkFor: (ItemDto) -> String = { container.repository().artworkUrl(it.thumb) }
 
+    // Chapters (Chunk 9): a bottom sheet on phones and in fullscreen; on the
+    // tablet's two-pane screen the list takes Up next's place.
+    val chapters = remember(current) { chaptersOf(current) }
+    var chaptersOpen by remember(ratingKey) { mutableStateOf(false) }
+    var chapterPositionMs by remember { mutableLongStateOf(0L) }
+    val openChapters: (() -> Unit)? = if (chapters.isNotEmpty()) {
+        {
+            // Read the position first, so the list opens on the chapter playing.
+            chapterPositionMs = vm.playback.player.currentPosition
+            chaptersOpen = true
+        }
+    } else {
+        null
+    }
+    LaunchedEffect(chaptersOpen) {
+        while (chaptersOpen) {
+            chapterPositionMs = vm.playback.player.currentPosition
+            kotlinx.coroutines.delay(500)
+        }
+    }
+    val chapterIndex = chapterIndexAt(chapters, chapterPositionMs)
+    val seekTo: (Long) -> Unit = { ms ->
+        vm.playback.seekTo(ms)
+        chapterPositionMs = ms
+    }
+    val twoPane = mode.useSideRail && !fullscreen
+    if (chaptersOpen && !twoPane) {
+        ModalBottomSheet(onDismissRequest = { chaptersOpen = false }) {
+            ChaptersHeader(chapters.size, onClose = { chaptersOpen = false })
+            ChapterList(
+                chapters = chapters,
+                currentIndex = chapterIndex,
+                artworkFor = { container.repository().artworkUrl(it) },
+                onSeek = { ms ->
+                    seekTo(ms)
+                    chaptersOpen = false
+                },
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
+    }
+
     if (fullscreen) {
         VideoPlayer(
             manager = vm.playback,
@@ -262,6 +311,7 @@ fun WatchScreen(
             },
             onDock = onBack,
             overlay = playerOverlay,
+            onOpenChapters = openChapters,
             modifier = Modifier.fillMaxSize(),
         )
         return
@@ -288,9 +338,10 @@ fun WatchScreen(
                         onToggleFullscreen = { onFullscreenChange(true) },
                         onDock = onBack,
                         overlay = playerOverlay,
+                        onOpenChapters = openChapters,
                         modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
                     )
-                    DescriptionCard(current, onOpenChannel)
+                    DescriptionCard(current, onOpenChannel, chapters.size, openChapters, seekTo)
                 }
                 Box(
                     Modifier
@@ -303,6 +354,16 @@ fun WatchScreen(
                         .weight(0.4f)
                         .fillMaxHeight(),
                 ) {
+                    if (chaptersOpen) {
+                        ChaptersHeader(chapters.size, onClose = { chaptersOpen = false })
+                        ChapterList(
+                            chapters = chapters,
+                            currentIndex = chapterIndex,
+                            artworkFor = { container.repository().artworkUrl(it) },
+                            onSeek = seekTo,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
                     UpNextHeader(queue, upNextShown.isEmpty(), onStopChannel = vm.playback::clearQueue)
                     LazyColumn(Modifier.weight(1f)) {
                         items(upNextShown, key = { it.ratingKey }) { next ->
@@ -315,6 +376,7 @@ fun WatchScreen(
                         }
                         item { Spacer(Modifier.height(24.dp)) }
                     }
+                    }
                 }
             }
         } else {
@@ -326,9 +388,10 @@ fun WatchScreen(
                     onToggleFullscreen = { onFullscreenChange(true) },
                     onDock = onBack,
                     overlay = playerOverlay,
+                    onOpenChapters = openChapters,
                     modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
                 )
-                DescriptionCard(current, onOpenChannel)
+                DescriptionCard(current, onOpenChannel, chapters.size, openChapters, seekTo)
                 HorizontalDivider()
                 UpNextHeader(queue, upNextShown.isEmpty(), onStopChannel = vm.playback::clearQueue)
                 LazyColumn(Modifier.weight(1f)) {
@@ -349,7 +412,13 @@ fun WatchScreen(
 
 /** Expandable title/channel/summary card — readable while playing (spec §8). */
 @Composable
-private fun DescriptionCard(item: ItemDto, onOpenChannel: (String) -> Unit) {
+private fun DescriptionCard(
+    item: ItemDto,
+    onOpenChannel: (String) -> Unit,
+    chapterCount: Int = 0,
+    onOpenChapters: (() -> Unit)? = null,
+    onSeek: (Long) -> Unit = {},
+) {
     var expanded by remember { mutableStateOf(false) }
     Column(
         Modifier
@@ -378,17 +447,52 @@ private fun DescriptionCard(item: ItemDto, onOpenChannel: (String) -> Unit) {
             }
             Text(
                 listOfNotNull(
-                    formatAddedAt(item.addedAt).takeIf { it.isNotBlank() },
+                    formatUploadDate(item).takeIf { it.isNotBlank() },
                     formatDuration(item.duration),
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        // Chunk 9: the way into the chapter list from the card.
+        if (chapterCount > 0 && onOpenChapters != null) {
+            Text(
+                "Chapters · $chapterCount  ›",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable(onClick = onOpenChapters)
+                    .padding(top = 8.dp, bottom = 2.dp, end = 24.dp),
+            )
+        }
         if (item.summary.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
+            // Timestamps in the description ("4:05") jump there (Chunk 9).
+            val shown = if (expanded) item.summary else item.summary.lineSequence().first()
+            val linkColor = MaterialTheme.colorScheme.primary
+            val summaryText = remember(shown, item.duration, linkColor) {
+                androidx.compose.ui.text.buildAnnotatedString {
+                    append(shown)
+                    descriptionTimestamps(shown, item.duration).forEach { stamp ->
+                        addLink(
+                            androidx.compose.ui.text.LinkAnnotation.Clickable(
+                                tag = "t${stamp.timeMs}",
+                                styles = androidx.compose.ui.text.TextLinkStyles(
+                                    androidx.compose.ui.text.SpanStyle(
+                                        color = linkColor,
+                                        fontWeight = FontWeight.Medium,
+                                    ),
+                                ),
+                            ) { onSeek(stamp.timeMs) },
+                            stamp.range.first,
+                            stamp.range.last + 1,
+                        )
+                    }
+                }
+            }
             Text(
-                if (expanded) item.summary else item.summary.lineSequence().first(),
+                summaryText,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = if (expanded) Int.MAX_VALUE else 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,

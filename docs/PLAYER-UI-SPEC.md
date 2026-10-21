@@ -48,8 +48,8 @@ Times: `m:ss` under 1 h, `h:mm:ss` above.
 | **Single tap while the bubble is up** | **Tap-to-continue**: another 10 s on that side (the other side starts a new count) | Bubble shows the running total — double-tap + 3 taps = "+40s"; never toggles controls |
 | ±10 s buttons (controls) | Seek ±10 s per tap | Same running-total bubble as the taps |
 | Long-press anywhere (playing) | Temporary **2× speed** | Rounded chip top-center "⏩ 2x speed"; release restores 1× |
-| **Downward drag from video** | **Dock to miniplayer** (playback continues) | Watch screen closes; live video appears in the mini bar (user direction 2026-10-16) |
-| **Upward drag on the inline player** | **Enter fullscreen** (same as the fullscreen button) | 35 % of the player height commits; ignored in fullscreen and while zoomed (user direction 2026-10-19) |
+| **Downward drag from video** | **Dock to miniplayer** (playback continues) | Watch screen closes; live video appears in the mini bar |
+| **Upward drag on the inline player** | **Enter fullscreen** (same as the fullscreen button) | 35 % of the player height commits; ignored in fullscreen and while zoomed |
 | Horizontal drag on scrubber | Scrub | **BIF preview frame** (`/library/parts/{id}/indexes/sd/{ms}`, 5 s buckets, Coil-cached) above the thumb + timestamp; text-only bubble when the part has no `indexes` attribute |
 | Double-tap center | Toggle controls (a11y parity) | — |
 | **CC button** | Captions on/off; with several subtitle or audio tracks, a menu: Subtitles (Off + each language) and Audio | The chosen subtitle language carries over to the next video (Chunk 3) |
@@ -58,13 +58,13 @@ Times: `m:ss` under 1 h, `h:mm:ss` above.
 | **One-finger drag while zoomed** | Pan (convenience) | Same clamp |
 | Double-tap while zoomed | Snap back to 1× (centered) | — |
 
-Brightness and volume vertical drags were **removed** (user direction
-2026-10-16): the app must not control device brightness or volume.
+Brightness and volume vertical drags were **removed** (2026-10-16): the
+app must not control device brightness or volume.
 
 Single tap within the bottom 42 dp band scrubs (thumb drag), not toggles.
 
-**Zoom implementation note (user direction, 2026-10-15 — "I really like
-this, be sure we can zoom and pan the zoomed video realtime"):** the video
+**Zoom implementation note (2026-10-15 — zoom and pan must work in real
+time on the playing video):** the video
 surface must be a **TextureView** (Media3 `setVideoSurfaceType`), not
 SurfaceView — Compose `graphicsLayer` scale/translation transforms do not
 apply to SurfaceView content. Zoom state = `scale` + `offset` in a
@@ -116,7 +116,7 @@ Anatomy:
 3. Preview/thumbnail sprite availability for scrub preview.
 4. Real AV1 direct-play on emulator (exit test).
 
-## 8. Playback-first interaction model (user direction, 2026-10-15)
+## 8. Playback-first interaction model (2026-10-15)
 
 The differentiator vs the Plex app: a browse-while-watching flow.
 Plex buries each video clicks deep and shows details before playing;
@@ -131,17 +131,17 @@ OwnDemand plays first and keeps the app browsable.
 - **Up-next below**: "More from <collection/playlist>" 16:9 cards;
   tapping swaps the player item and scrolls back to the player.
 - **Browse while watching**: the bottom menu stays visible while playing
-  portrait (user direction 2026-10-16) — the watch screen overlays the tab
+  portrait (2026-10-16) — the watch screen overlays the tab
   area inside the shell; tapping any tab (or the down-drag from the player,
   or system back) hands playback to the floating **miniplayer**. The mini
   bar shows the **live video**, floats (not docked), follows a drag and
   **snaps to the nearest of the four corners**; dragging it fully off
-  screen (or X) stops playback (user direction 2026-10-16).
-- **Auto-rotate** (user rule 2026-10-16, phone behavior): a physical turn
+  screen (or X) stops playback.
+- **Auto-rotate** (phone behaviour): a physical turn
   to landscape → fullscreen; a turn back to portrait → inline. Collapsing
   fullscreen while still held landscape disarms the landscape trigger until
   the phone is upright again.
-- **No back arrow on the player** (user direction 2026-10-16): the menu,
+- **No back arrow on the player:** the menu,
   system back and the down-drag all leave playback.
 - **Fullscreen** = the §2 player surface with the full control set; the
   bottom chrome lifts ~14 dp + nav-bar inset off the screen edge; the menu

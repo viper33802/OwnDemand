@@ -33,6 +33,27 @@ class ChannelSortTest {
     }
 
     @Test
+    fun `newest and oldest go by upload date, not the date added`() {
+        // Back catalogue downloaded in one go: added order disagrees with upload order.
+        val catalogue = listOf(
+            ItemDto(ratingKey = "late-upload", addedAt = 100, originallyAvailableAt = "2025-06-01"),
+            ItemDto(ratingKey = "early-upload", addedAt = 300, originallyAvailableAt = "2019-02-10"),
+            ItemDto(ratingKey = "mid-upload", addedAt = 200, originallyAvailableAt = "2022-11-30"),
+        )
+        assertEquals(listOf("late-upload", "mid-upload", "early-upload"),
+            sortChannelVideos(catalogue, HomeSort.Newest).map { it.ratingKey })
+        assertEquals(listOf("early-upload", "mid-upload", "late-upload"),
+            sortChannelVideos(catalogue, HomeSort.Oldest).map { it.ratingKey })
+    }
+
+    @Test
+    fun `upload date reads Plex's yyyy-MM-dd and ignores anything else`() {
+        assertEquals(java.time.LocalDate.of(2026, 10, 18), ItemDto(originallyAvailableAt = "2026-10-18").uploadDate)
+        assertEquals(null, ItemDto(originallyAvailableAt = "").uploadDate)
+        assertEquals(null, ItemDto(originallyAvailableAt = "October").uploadDate)
+    }
+
+    @Test
     fun `title sort ignores case`() {
         assertEquals(
             listOf("a", "b", "c"),

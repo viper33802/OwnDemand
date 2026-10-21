@@ -140,6 +140,10 @@ The repository must never contain:
   video ids from a personal library.
 - Third-party proprietary code, assets, or branding.
 - Signing keys, build outputs, or logs containing secrets.
+- Facts about a contributor's own library, devices or personal choices
+  (item counts, other libraries, scan results, device models). Docs
+  describe the app and Plex in general; keep such notes in the
+  git-ignored `notes/` folder.
 
 Screenshots must use simulated data only. Use `.gitignore` for local
 analysis artifacts, and remember that ignoring a file does not untrack it.

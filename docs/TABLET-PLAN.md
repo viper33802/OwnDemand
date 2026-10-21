@@ -5,16 +5,17 @@ Status: Complete (T0–T5 shipped). Originally proposed for approval (per AGENTS
 implementation before approval).
 Evidence: `TABLET-SURVEY.md` + `docs/tablet-survey/` (archived to the local
 git-ignored `archive/` on 2026-10-18 — kept for reference, no longer shipped).
-Physical test device: Galaxy Tab S6 (2560×1600 @360 dpi, sw711dp, Android 12
-/API 32). Emulator: `owndemand_api36` AVD re-spec'd to identical metrics.
+Target tablet: 2560×1600 @360 dpi (sw711dp; 1138×711 dp landscape),
+Android 12 / API 32. Emulator: `owndemand_api36` AVD re-spec'd to the same
+metrics.
 
 ## 1. Principles
 
 1. **Detect the window, not the device.** Tablet mode triggers from the
    current window's size class (Material 3 width classes), not
-   `smallestScreenWidth` device flags. One rule then covers: Tab S6
+   `smallestScreenWidth` device flags. One rule then covers: target tablet
    landscape (1138 dp → Expanded), portrait (711 dp → Medium), split-screen
-   / DeX windows (a narrow window gets the phone layout — correct), and
+   / desktop-mode windows (a narrow window gets the phone layout — correct), and
    future foldables. Phone behaviour (<600 dp) must not change at all —
    the phone is still the reference device.
 2. **Recompose, don't restart.** `MainActivity` already handles
@@ -27,7 +28,7 @@ Physical test device: Galaxy Tab S6 (2560×1600 @360 dpi, sw711dp, Android 12
 
 Width breakpoints (Material 3 standard):
 
-| Window width dp | Name here | Tab S6 case |
+| Window width dp | Name here | target tablet case |
 | --- | --- | --- |
 | < 600 | `Phone` | split-screen slivers |
 | 600 – 839 | `TabletPortrait` class **Medium** | portrait (711) |
@@ -48,8 +49,8 @@ Width breakpoints (Material 3 standard):
   val LocalLayoutMode = staticCompositionLocalOf { LayoutMode.Phone }
   fun widthMode(widthDp: Dp): LayoutMode = when {
       widthDp < 600.dp -> LayoutMode.Phone
-      widthDp < 840.dp -> LayoutMode.TabletCompact   // Tab S6 portrait
-      widthDp < 1200.dp -> LayoutMode.TabletMedium   // Tab S6 landscape
+      widthDp < 840.dp -> LayoutMode.TabletCompact   // target tablet portrait
+      widthDp < 1200.dp -> LayoutMode.TabletMedium   // target tablet landscape
       else -> LayoutMode.TabletExpanded
   }
   ```
@@ -90,7 +91,7 @@ Width breakpoints (Material 3 standard):
 - Text field + empty state capped via `readableWidth()`, centred.
 - Search logic untouched.
 
-### 3.4 Channels tab (`ChannelsScreen.kt`) — revised by user direction 2026-10-17
+### 3.4 Channels tab (`ChannelsScreen.kt`) — revised 2026-10-17
 The T2 grid-of-rows version was rejected on the device: **"I don't like how
 the list of channels is being displayed on tablet. What about a left column
 for the channel names."** Shipped instead at ≥600 dp: **two-pane
@@ -98,8 +99,8 @@ master–detail** — a 280 dp left rail listing channels (subscription-style ro
 selection highlight, pagination preserved, first channel auto-selected)
 beside the selected channel's videos. The detail pane computes its own
 column count from its width (`detailPaneColumns`, target ≥350 dp/card):
-Tab S6 landscape → **2 columns**, portrait → **1 column** — exactly the
-user's brief. Phones keep the drill-in list → full-screen channel page.
+Target tablet landscape → **2 columns**, portrait → **1 column** — exactly the
+brief. Phones keep the drill-in list → full-screen channel page.
 
 ### 3.5 Channel page (same file)
 - Pinned header: stays full width (avatar · name · count · sort); the
@@ -140,7 +141,7 @@ Three layout regimes (fixes A1):
 
 - No new screens, no Android TV, no picture-in-picture, no multi-select,
   no drag-and-drop customization.
-- No per-device hacks (Samsung DeX / split-screen "optimisations"): the
+- No per-device hacks (desktop-mode / split-screen "optimisations"): the
   width-class rule already handles them.
 - No changes to Plex data layer, playback pipeline, or `MainViewModel`
   state machine.
@@ -152,16 +153,16 @@ Three layout regimes (fixes A1):
 | --- | --- | --- | --- |
 | **T0** | Done: tablet-spec'd AVD + baseline survey + plan | — | ✔ |
 | **T1** | **Done 2026-10-17.** Foundation: `LocalLayoutMode` from the live window Configuration (no extra dependency — the plan sketched `material3-window-size-class`, but `LocalConfiguration.screenWidthDp` + the pure `widthMode()` mapping give identical behaviour with one less artifact, and it is what `LayoutModeTest` pins), `browseColumns`, `rowCardWidth`, `readableWidth`; `readableWidth` on Settings/Setup/LibraryPicker + 480 dp slider cap; width-capped centred nav bar; B1 wordmark fixed via `BrandWordmark` + `brand_wordmark_light.png` (white→dark "Plex" redraw; both themes verified). After-shots: `tablet-survey/after-T1/`; tests: 7 new, all green | shell + forms | small |
-| **T2** | **Done 2026-10-17.** Grids: Home feed + search results `browseColumns` (3 landscape / 2 portrait / 1 phone, zero-gutter at 1 column so phones are pixel-identical); search field capped + centred; continue-watching 260 dp. **Channels revised mid-milestone by user direction → two-pane master–detail (§3.4): 280 dp channel rail + detail pane with own-width columns (2 landscape / 1 portrait), selection highlight, first-channel auto-select, pagination kept; phone drill-in untouched.** After-shots: `tablet-survey/after-T2/` (B1–B10); 8 unit tests green incl. `detailPaneColumns` | browse surfaces | medium |
+| **T2** | **Done 2026-10-17.** Grids: Home feed + search results `browseColumns` (3 landscape / 2 portrait / 1 phone, zero-gutter at 1 column so phones are pixel-identical); search field capped + centred; continue-watching 260 dp. **Channels revised mid-milestone → two-pane master–detail (§3.4): 280 dp channel rail + detail pane with own-width columns (2 landscape / 1 portrait), selection highlight, first-channel auto-select, pagination kept; phone drill-in untouched.** After-shots: `tablet-survey/after-T2/` (B1–B10); 8 unit tests green incl. `detailPaneColumns` | browse surfaces | medium |
 | **T3** | **Done 2026-10-17.** `NavigationRail` for ≥840 dp (search icon, Home, Channels; Settings pinned at the foot), bottom bar kept centred for 600–839 portrait, unchanged for phones; fullscreen hides both. The feared nav-rail + channel-rail double stack works — rail 80 dp, channel rail 280 dp, 2 video columns — so no per-tab exception was needed. Content extraction (`ShellContent`) keeps one code path for both shells; miniplayer docks inside the content area, never under the rail. After-shots `tablet-survey/after-T3/` (C1–C5); +1 test (`useSideRail` boundary), 9 green | shell landscape | small–medium |
 | **T4** | **Done 2026-10-17.** Two-pane inline watch at rail width (player + card left 60 %, Up-next scrolls right 40 %) — survey A1 fixed; expanded card, Up-next tap, BIF previews verified in-pane. Portrait tablets keep the stacked watch; the planned 45 % player cap proved unnecessary (711 dp width → 400 dp tall = 35 %, card header always visible). Phone-only orientation rules gated: tablets never portrait-lock inline, never rotate-to-fullscreen, fullscreen keeps the held orientation (SCREEN_ORIENTATION_USER); the upright-sensor auto-collapse stays phone-only — it false-fires on a tablet lying flat (emulator collapsed fullscreen 100 ms after opening — found and fixed with a temporary log). Fullscreen button: 48 dp target fully inside the player (was an 11 px clipped sliver over the nav bar). After-shots tablet-survey/after-T4/ (D1–D8) | watch | medium–large |
-| **T5** | **Done 2026-10-18.** Full sweep on the tablet emulator: home / channels two-pane / watch / fullscreen / mini / settings × light+dark × both rotations (`docs/tablet-survey/after-T5/`, local — not committed). Phone regression run by temporarily `wm size/density`-overriding the tablet AVD to 1080×2400@420 (411 dp) instead of a fresh AVD — same connected app, width-driven Phone mode incl. its rules: single column, bottom bar, stacked watch, rotate-to-fullscreen fires via the accelerometer (`emu sensor`), upright re-arms it, BACK restores inline. Restored to 2560×1600@360 after. Two app-side false alarms, both proven emulator artifacts (uiautomator node tree + re-composite showed complete correct layout): a black band on the portrait home (stale gfxstream blit region after rotation) and the mis-oriented fullscreen surface under the `wm` override. Physical Tab S6: APK installed at end of T5 (login on-device by the user). | all | medium |
+| **T5** | **Done 2026-10-18.** Full sweep on the tablet emulator: home / channels two-pane / watch / fullscreen / mini / settings × light+dark × both rotations (`docs/tablet-survey/after-T5/`, local — not committed). Phone regression run by temporarily `wm size/density`-overriding the tablet AVD to 1080×2400@420 (411 dp) instead of a fresh AVD — same connected app, width-driven Phone mode incl. its rules: single column, bottom bar, stacked watch, rotate-to-fullscreen fires via the accelerometer (`emu sensor`), upright re-arms it, BACK restores inline. Restored to 2560×1600@360 after. Two app-side false alarms, both proven emulator artifacts (uiautomator node tree + re-composite showed complete correct layout): a black band on the portrait home (stale gfxstream blit region after rotation) and the mis-oriented fullscreen surface under the `wm` override. Installed on a real tablet at the end of T5 for a hands-on check. | all | medium |
 
 Each milestone ends with an emulator screenshot pass in
 `docs/tablet-survey/after-<milestone>/` (local only — the folder is
 git-ignored since the PNGs show account and server names).
 
-## 6. Acceptance criteria (tablet = Tab S6 metrics)
+## 6. Acceptance criteria (the target tablet's metrics)
 
 1. Landscape 1138×711: home shows **3 columns**; channels grid ≥3; watch
    shows player **and** Up-next simultaneously; metadata card openable;
@@ -182,9 +183,9 @@ git-ignored since the PNGs show account and server names).
   acceptable (common in video apps), noted not silently changed.
 - **material3-window-size-class** adds one dependency; Google-maintained,
   matches existing M3 usage; no API surface beyond size values.
-- **Split-screen / DeX** (user may try on device): narrow windows fall to
+- **Split-screen / desktop windowing** (try on a device): narrow windows fall to
   Phone layout by design.
-- **Physical device is API 32** — CI/emulator target is 36; anything newer
+- **Target tablet is API 32** — CI/emulator target is 36; anything newer
   than API 32 APIs already guarded by minSdk 26 rules; window-size-class
   needs nothing new.
 - Repo hygiene: survey PNGs reference private account/server names, so

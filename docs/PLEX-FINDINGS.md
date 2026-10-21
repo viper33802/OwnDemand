@@ -3,8 +3,8 @@
 Date: 2026-10-15. Read-only discovery scan of a development Plex Media Server,
 focused on the video library. **No writes were performed** (GET/HEAD only).
 
-- Server: PMS **1.43.4.10903-e5521bd8c**, Linux, claimed, `apiVersion 1.2.3`
-  (matches the official OpenAPI spec used in the discovery report).
+- Server: PMS **1.43.4**, `apiVersion 1.2.3` (matches the official OpenAPI
+  spec used in the discovery report).
 - Transport tested: plain HTTP on the LAN.
 - Auth: owner `X-Plex-Token` (supplied out-of-band; never logged or committed).
 
@@ -19,20 +19,19 @@ values into this file or any tracked file.
 ## 1. Library layout — CONFIRMED
 
 `GET /library/sections` returns the server's libraries. The target
-(section key `6` in the examples below — your key will differ; persist the
-`uuid`, not the key):
+(section key `{key}` in the examples below; persist the `uuid`, not the key):
 
 | Field | Value |
 |---|---|
-| key | `6` (numeric, **unstable** — do not persist alone) |
+| key | numeric, **unstable** — do not persist alone |
 | title | `<video-library display name>` |
 | type | **`movie`** |
 | agent | `tv.plex.agents.none` (local assets, no online agent) |
 | scanner | **`Plex Video Files`** |
 | uuid | stable per-library identifier (persist this, not `key`) |
 
-Other sections (Movies, TV Shows, Music, Audiobooks) exist and **must be
-excluded** from the OwnDemand feed/search.
+A server usually has other libraries too (movies, TV, music, …); they
+**must be excluded** from the OwnDemand feed and search.
 
 **Library selection persistence (resolves discovery-report §4.3):** persist
 `machineIdentifier` + section **`uuid`**; store `title` for display; resolve
@@ -41,7 +40,7 @@ disappears (library removed/renamed).
 
 ## 2. Video items — CONFIRMED
 
-`GET /library/sections/6/all?sort=addedAt:desc` (paginated). Total item count
+`GET /library/sections/{key}/all?sort=addedAt:desc` (paginated). Total item count
 (via `X-Plex-Container-Size: 0` header → `totalSize`). Each item:
 
 | Field | Example / note |
@@ -60,12 +59,12 @@ disappears (library removed/renamed).
 
 **Channel identity:** two consistent sources — (a) the `Collection` tag on
 each item, and (b) the `<Channel> - ` title prefix. The collection tag is the
-authoritative grouping (matches the user's statement that Youtarr channels
-become Plex Collections). The title prefix is a usable display fallback.
+authoritative grouping (Youtarr turns each channel into a Plex
+Collection). The title prefix is a usable display fallback.
 
 ## 3. Channels = Plex Collections — CONFIRMED (resolves the §4.5 conflict)
 
-`GET /library/sections/6/collections` returns one collection per
+`GET /library/sections/{key}/collections` returns one collection per
 channel), each:
 
 | Field | Value |
@@ -84,8 +83,8 @@ Members: `GET /library/collections/{id}/children` (the returned key) —
 reported). Both `/children` and `/items` resolve
 (200); **use the server-returned `key` verbatim** rather than hardcoding.
 
-> The AGENTS.md §4.1 model (channels = Collections) is **correct for this
-> server**. The Youtarr "folder-per-channel" default is how files are laid on
+> The AGENTS.md §4.1 model (channels = Collections) **holds for Youtarr
+> libraries**. The Youtarr "folder-per-channel" default is how files are laid on
 > disk; the Plex library surfaces them as Collections. No competing
 > synchronization is needed — read collection membership from Plex.
 
@@ -96,42 +95,42 @@ names them `YT: <name>`). Each has `key=/playlists/{id}/items`. Members:
 `GET /playlists/{id}/items` — **verified** returns items in order, each
 with full `Media`.
 
-**Redundancy validation (2026-10-16, user direction):** every video in
-every playlist was checked against channel-collection membership:
+**Redundancy check (2026-10-16):** every playlist video was checked
+against channel-collection membership:
 
-- The Youtarr `YT:` playlists — every video already in a channel collection;
-  one of them was empty.
-- One unrelated playlist — **not in the video library at all**: its items
-  were `episode` items in the **TV Shows** library. Surfacing them in OwnDemand was cross-library leakage.
+- Youtarr's `YT:` playlists only hold videos that are already in a channel
+  collection.
+- Other playlists on a server can point at items outside the video library
+  (e.g. TV episodes); surfacing them would leak other libraries into the app.
 
 Conclusion: playlists are a Youtarr ingestion mechanism; the Playlists
-tab and its data-layer methods were removed (AGENTS.md §4.2). One
-library item had no Collection tag — a Youtarr tagging gap worth fixing server-side;
-it still appears in the home feed, just not under a channel.
+tab and its data-layer methods were removed (AGENTS.md §4.2). An item
+without a Collection tag still appears in the home feed, just not under a
+channel.
 
 ## 5. Search — IMPORTANT CONSTRAINT
 
-- **Global `/hubs/search?query=…&sectionID=6` does NOT scope to the section.**
-  Despite `sectionID=6`, it returned hubs for episodes, shows, artists,
+- **Global `/hubs/search?query=…&sectionID={key}` does NOT scope to the section.**
+  Despite `sectionID`, it returned hubs for episodes, shows, artists,
   tracks, actors, etc. — i.e. **cross-library results**. Using it would
   violate AGENTS.md §4.3 (never mix unrelated libraries into search).
 - **Re-verified at M5 (2026-10-16):** `/library/search?query=guitar` returns
-  `SearchResult[].Metadata` from **all** libraries (Music/Movies/TV mixed
-  in), and `scope=6` does **not** narrow it. `/library/sections/6/search`
+  `SearchResult[].Metadata` from **all** libraries (other libraries mixed
+  in), and `scope={key}` does **not** narrow it. `/library/sections/{key}/search`
   → 400 Bad Request. Server-side section-scoped free-text search is not
-  available on this server.
+  available (PMS 1.43).
 - **Correct scoped search = section media query.**
-  `GET /library/sections/6/all?title=<query>` — **verified** returns only
+  `GET /library/sections/{key}/all?title=<query>` — **verified** returns only
   channel `movie` items. Because the channel name is embedded in the title,
   a title query also matches channel names.
 - Tag-field search (`collection=<name>`) uses exact tag match, not substring
   (`collection=Orbit` → 0 hits when the tag is `Orbit Notes`). Prefer title
   search for free-text; use exact collection names for channel drill-down.
-- Autocomplete available at `/library/sections/6/autocomplete?title.query=…`
+- Autocomplete available at `/library/sections/{key}/autocomplete?title.query=…`
   (not exercised; documented in spec).
 
 **Decision (M5, final):** OwnDemand search is **local**. The whole library
-(hundreds of items; pages of 100 fetch in ~80 ms on the LAN) is loaded once into
+(a few hundred to a few thousand items; pages of 100 are fast) is loaded once into
 `LibraryIndex` and filtered in memory by title + channel name — instant,
 fully section-scoped, and the same index powers sorting, the watched
 filter, Continue watching and the mixed home feed. Server search endpoints
@@ -139,7 +138,7 @@ are not used.
 
 ## 6. Sorting, filters, resume — CONFIRMED AVAILABLE
 
-`GET /library/sections/6?includeDetails=1` advertises pivots and fields:
+`GET /library/sections/{key}?includeDetails=1` advertises pivots and fields:
 
 - Pivots: `all`, `unwatched`, `newest`, `recentlyAdded`, `recentlyViewed`,
   `onDeck`, `collection`, plus movie-style pivots (genre/year/etc.).
@@ -149,22 +148,23 @@ are not used.
 - **Home feed ordering:** `sort=addedAt:desc` (recently added) — verified.
 - **Watched filter:** `unwatched=1` accepted (200). Note: `limit=0` does not
   return `totalSize`; use the `X-Plex-Container-Size: 0` header for counts.
-- **Resume / Continue Watching:** `GET /library/sections/6/onDeck` returns
+- **Resume / Continue Watching:** `GET /library/sections/{key}/onDeck` returns
   items with **`viewOffset`** (ms) — verified. `viewCount` present on items. Resume is feasible from item
   metadata; progress reporting uses the timeline feature key `/:/timeline`
   (write path — not exercised in this read-only scan).
 
-## 7. Playback — CRITICAL FINDING: AV1-dominant library
+## 7. Playback — CRITICAL FINDING: libraries can be mostly AV1
 
-Stream probe over 30 items (oldest + newest):
+What a stream probe of a Youtarr library can look like (it depends on the
+downloader's format settings):
 
-| Aspect | Distribution |
+| Aspect | Seen |
 |---|---|
-| **Video codec** | **av1: 26, h264: 3, vp9: 1** (AV1 ≈ 87%) |
+| **Video codec** | **mostly AV1**, some h264 and vp9 |
 | Resolution | mostly 1920×1080, some 1280×720 |
-| Audio codec | **aac** (all) |
-| Subtitles | **srt** (embedded, ~half of items) |
-| Container | **mp4** (all) |
+| Audio codec | **aac** |
+| Subtitles | **srt** sidecars on many items |
+| Container | **mp4** |
 
 Item `Media`/`Part` structure (verified):
 - `Media.container = mp4`, `Part.key = /library/parts/{partId}/{ts}/file.mp4`.
@@ -206,13 +206,12 @@ and Coil can load media/artwork without custom header plumbing.
    scan proves the need but not the final profile string.
 3. **Emulator risk (elevated).** Android emulator images may lack hardware
    AV1; software AV1 decode works but is slow and may stutter at 1080p. This
-   is now the **top playback risk** for the emulator-based test target the
-   user chose. Mitigations to evaluate in M3: use an AV1-capable system image,
+   is now the **top playback risk** for the emulator-based test target. Mitigations to evaluate in M3: use an AV1-capable system image,
    test on a physical AV1 device, or implement a server-side transcode path
    (requires solving the client-profile decision in 7b).
-   *Update (M0):* the dev machine is Apple Silicon (fast native arm64
-   emulation) and a physical Android device is available. Risk downgraded
-   to MEDIUM; confirm empirically in M3.
+   *Update (M0):* on an Apple Silicon host (fast native arm64 emulation),
+   with a physical device as a fallback, the risk is MEDIUM; confirm
+   empirically in M3.
 
 ### 7d. Transcoding constraint (design decision, 2026-10-15)
 **The app must not depend on external pre-transcoding tools** (e.g. Tdarr)
@@ -244,27 +243,27 @@ remains an optional server-side optimization, never a requirement.
 
 ### Revised risk ranking
 1. AV1 on the emulator — **MEDIUM** (downgraded after M0: Apple Silicon
-   host; physical device also available). Confirm empirically in M3.
+   host). Confirm empirically in M3.
 2. Client-profile decision string for correct server decisions — MEDIUM (M3).
 3. Everything previously "unknown" about library/collection/playlist/search
    shape — **now resolved**.
 
 ## 10. Next step
 M1 exit criteria met. **M0 completed 2026-10-15** (see below). Next: M2
-(app skeleton + connection/auth/library picker) on user approval.
+(app skeleton + connection/auth/library picker) once approved.
 
 ## 11. M0 environment — INSTALLED & VERIFIED (2026-10-15)
 
-| Component | Version | Location |
-|---|---|---|
-| JDK (persisted `JAVA_HOME` in `~/.zshrc`) | openjdk 21.0.12.1 | `/opt/homebrew/opt/openjdk@21` |
-| Android SDK (`ANDROID_HOME`) | cmdline-tools 22.0, licenses accepted | `/opt/homebrew/share/android-commandlinetools` |
-| Platform | android-36 (API 36 / Android 16) | `platforms/android-36` |
-| Build-tools | 36.1.0 | `build-tools/36.1.0` |
-| platform-tools (adb) | 37.0.1 | `platform-tools/` |
-| Emulator | 37.2.12 | `emulator/` |
-| System image | android-36 google_apis arm64-v8a (rev 7) | `system-images/…` |
-| AVD | `owndemand_api36` (Pixel 8 profile) | `~/.android/avd/` |
+| Component | Version |
+|---|---|
+| JDK (`JAVA_HOME`) | OpenJDK 21 |
+| Android SDK (`ANDROID_HOME`) | cmdline-tools 22.0, licenses accepted |
+| Platform | android-36 (API 36 / Android 16) |
+| Build-tools | 36.1.0 |
+| platform-tools (adb) | 37.0.1 |
+| Emulator | 37.2.12 |
+| System image | android-36 google_apis arm64-v8a |
+| AVD | `owndemand_api36` |
 
 **Boot verification:** headless boot (`-gpu host`) reached
 `sys.boot_completed=1` in ~15 s; Android 16, arm64-v8a.
@@ -274,8 +273,8 @@ software AV1 decoders `c2.android.av1.decoder` **and
 `c2.android.av1-dav1d.decoder`** (dav1d). Reference performance for dav1d at
 1920×1080 is 17–54 fps (generic CI figures); on an Apple Silicon host (native
 arm64 execution) 1080p30 software AV1 is expected to be comfortable.
-**Final confirmation happens in M3 against real Plex AV1 content**; the
-user's physical Android device remains the fallback for hardware AV1.
+**Final confirmation happens in M3 against real Plex AV1 content**; a
+physical Android device remains the fallback for hardware AV1.
 
 ## 12. M2 — App skeleton + connection — DONE (2026-10-15)
 
@@ -317,9 +316,9 @@ token; any restart then sent garbage as `X-Plex-Token`. Fixed with a real
 transient poll errors tolerated (5 consecutive = give up), sanitized
 logcat diagnostics under tag `PlexSetup`.
 
-**M2 verified on emulator `owndemand_api36`:** PIN sign-in (user-approved) →
+**M2 verified on emulator `owndemand_api36`:** PIN sign-in →
 token persisted (Keystore AES-GCM) → server discovery → auto-select the dev server
-via plex.direct HTTPS → `/library/sections` listed 5 libraries → the video library
+via plex.direct HTTPS → `/library/sections` listed the libraries → the video library
 selected (uuid-persisted) → main shell → **cold restart lands directly in
 the shell**. 12 unit tests green. No tokens in logs.
 
@@ -368,9 +367,9 @@ one endpoint is not "feature unavailable" — check the docs first.
 
 ## 14. M4a — collections & playlists endpoints (2026-10-16)
 
-Verified against the live server while building the Channels/Playlists tabs:
+Verified against a live server while building the Channels/Playlists tabs:
 
-- `GET /library/sections/6/collections` (paged via `X-Plex-Container-*`
+- `GET /library/sections/{key}/collections` (paged via `X-Plex-Container-*`
   headers) → the channel collections under `Metadata`: `ratingKey`, `key`
   (`/library/collections/{id}/children`), `title`, `thumb`
   (`/library/collections/{id}/composite/<ts>?width=400&height=600`, 2:3,
@@ -393,7 +392,7 @@ Verified against the live server while building the Channels/Playlists tabs:
 
 ## 15. M6 — subtitles, transcode caps, BIF file format (2026-10-16)
 
-- **Subtitles:** every item carries an English SRT sidecar — a
+- **Subtitles:** Youtarr items commonly carry an SRT sidecar — a
   `Stream@streamType="3"` whose `/library/streams/{id}` path serves plain
   `text/plain` SRT. Media3 renders it via
   `MediaItem.SubtitleConfiguration` (`APPLICATION_SUBRIP`); enabling the
@@ -416,9 +415,9 @@ Verified against the live server while building the Channels/Playlists tabs:
   this server, one every ~2 s). Whole file ≈ 1–3 MB per 25-min video →
   OwnDemand fetches it once at playback start and serves scrub previews
   from RAM (`BifIndex`).
-- **Coverage gap:** a handful of items — all recent adds — have **no**
-  `Part@indexes` attribute and `/indexes/sd` → 404: PMS has not generated
-  preview indexes for them yet. App behaviour: timestamp-only scrub preview.
+- **Coverage gap:** recently added items can have **no** `Part@indexes`
+  attribute (`/indexes/sd` → 404) until PMS generates their preview
+  indexes. App behaviour: timestamp-only scrub preview.
   Server-side fix: the library agent's "Generate video preview media"
   setting (user action).
 
@@ -430,7 +429,7 @@ Verified against the live server while building the Channels/Playlists tabs:
   from the player's selected track format). A 1080p source under the
   1080p cap direct-plays (no conversion). The 1080p conversion parameters
   (`videoResolution=1920x1080&maxVideoBitrate=8000`) only apply to taller
-  sources; none were available to test.
+  sources (not tested).
 - **Sessions:** each playback start sends its own `session=<uuid>`; when
   the player switches away, `/video/:/transcode/universal/stop?session=`
   ends the server-side conversion.
@@ -438,3 +437,18 @@ Verified against the live server while building the Channels/Playlists tabs:
   720p conversion, Media3's `onVideoSizeChanged` can still report
   1920x1080 (decoder reuse). Judge delivered quality by the selected
   track's `Format`, not the decoder output size.
+
+## 17. Chunk 9: chapters (2026-10-20)
+
+Verified read-only against a live server.
+
+- **Embedded chapters** come back only when asked for:
+  `/library/metadata/{id}?includeChapters=1` adds a `Chapter` array with
+  `tag` (title), `index`, `startTimeOffset` / `endTimeOffset` (ms),
+  `thumb` (`/library/media/{id}/chapterImages/{n}`, a Plex-made frame)
+  and `id` / `filter`. The thumbnail loads like any artwork path.
+- The first chapter starts at 0; some chapters can be zero-length (the
+  app skips them).
+- Description timestamp lists ("0:00 Intro …") generally match the
+  embedded chapters, so descriptions are not used as a chapter source.
+- `includeMarkers=1` can also return `credits` markers (not used yet).
