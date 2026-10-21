@@ -143,8 +143,10 @@ fun SettingsSheet(
             detail = "Jump over sponsors and other marked stretches. While on, the app asks " +
                 "SponsorBlock (sponsor.ajay.app) for a short hash of the video's source id — " +
                 "never which video, no Plex sign-in, no server address, no device details. " +
-                "Read-only: nothing is submitted or voted on. Segment data by SponsorBlock, " +
-                "CC BY-NC-SA.",
+                "Read-only: nothing is submitted or voted on.\n" +
+                // SponsorBlock's attribution template, word for word.
+                "Uses SponsorBlock data licensed used under CC BY-NC-SA 4.0 from " +
+                "https://sponsor.ajay.app/",
             checked = settings.skipSegments,
             onCheckedChange = { on ->
                 if (on) confirmSkipOn = true else onSkipSegmentsChange(false)

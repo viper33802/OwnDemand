@@ -33,3 +33,19 @@ distributed under the Apache License, Version 2.0:
   Copyright The Android Open Source Project
 - JSpecify annotations
   Copyright The JSpecify Authors
+
+------------------------------------------------------------------------------
+Third-party data
+
+Skip segments (an optional setting, off by default):
+Uses SponsorBlock data licensed used under CC BY-NC-SA 4.0 from
+https://sponsor.ajay.app/
+
+Licence: Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International, https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+While the setting is on, the app downloads segment timings from SponsorBlock
+as each video starts and keeps them in memory only. No SponsorBlock data is
+included in the app or in this repository. The data may not be used for
+commercial purposes, so any paid distribution of the app would need this
+feature removed or SponsorBlock's permission.

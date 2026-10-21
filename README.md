@@ -22,7 +22,9 @@ hierarchy. Tap a video and it plays immediately; keep browsing while it
 plays in a floating miniplayer.
 
 It talks only to *your own* server with *your own* Plex sign-in. No
-accounts, no backend, no analytics, no third-party services.
+accounts, no backend, no analytics, and no third-party services unless
+you switch on the optional *Skip segments* (see
+[Security & privacy](#security--privacy)).
 
 ## Screenshots
 
@@ -59,6 +61,12 @@ accounts, no backend, no analytics, no third-party services.
   video keeps going in a small floating window, or as sound with
   previous / play-pause / next on the notification, lock screen and
   headset. Both can be switched off in Settings.
+- **Skip segments** (optional, off by default) — jump over sponsors,
+  self-promotion and other stretches marked by the
+  [SponsorBlock](https://sponsor.ajay.app/) community, for videos whose
+  file names carry the source video's id (as Youtarr's do). Per category:
+  skip automatically (with Undo), show a skip button, or off; marked
+  stretches show on the scrubber.
 - **Search** across the selected library — titles and channel names.
 - **Resume & watched state** synced back to Plex, so other Plex clients
   stay in step.
@@ -120,8 +128,18 @@ configure your own signing key — see [`docs/RELEASING.md`](docs/RELEASING.md).
 - **Tokens stay on the device**, encrypted with an Android Keystore
   AES-GCM key, excluded from cloud backup and device transfer, and never
   logged or displayed.
-- **No third parties.** The app talks to plex.tv (sign-in and server
-  discovery) and to your server — nothing else.
+- **No third parties by default.** The app talks to plex.tv (sign-in and
+  server discovery) and to your server — nothing else.
+- **One opt-in exception: Skip segments.** Off by default; switching it on
+  asks for confirmation first. While it is on, the app sends one HTTPS
+  request to SponsorBlock (`sponsor.ajay.app`) as each video starts,
+  containing only the first 4 characters of a SHA-256 hash of the video's
+  source id. That prefix is shared by many videos, so the service cannot
+  tell which one you are watching; the app picks its own out of the
+  answer. The request uses its own HTTP client with no Plex token, Plex
+  headers, server address, or device or account details. It is
+  read-only: nothing is submitted or voted on. Any failure simply means
+  no segments.
 - Signing out removes the stored tokens.
 
 ## Optional: channel artwork for Youtarr libraries
@@ -216,6 +234,11 @@ OwnDemand is licensed under the [Apache License, Version 2.0](LICENSE).
 See [`NOTICE`](NOTICE) for the copyright notice and the third-party
 libraries the app includes; the app shows both under
 *Settings → Open-source licences*.
+
+The optional Skip segments feature uses SponsorBlock data licensed used
+under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+from https://sponsor.ajay.app/. The data is fetched at run time and is not
+part of this repository; it may not be used commercially.
 
 The OwnDemand name and logo are not covered by the licence. OwnDemand is an
 independent project, not affiliated with or endorsed by Plex, Inc. Plex is a

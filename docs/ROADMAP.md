@@ -201,21 +201,30 @@ timestamps in descriptions. Emulator: a video with many chapters and one
 without; scrubbing across chapters; the list in phone, fullscreen and
 tablet layouts; tapping a description timestamp.
 
-## Chunk 10 — Skip segments (SponsorBlock) · built, POC stage
+## Chunk 10 — Skip segments (SponsorBlock) · done on `main`, not yet released
 
 Planned 2026-10-21; the owner approved the scope change (the one opt-in
 exception to "contacts nothing but Plex") the same day and the POC is
 committed on `main` behind the off-by-default setting.
 
-**POC status (2026-10-21):** steps 1–2 done — live API check against the
-owner's library (100 of 150 sampled videos have segments; response shape
+**POC status (2026-10-21):** steps 1–2 done — live API check against a
+real library (100 of 150 sampled videos had segments; response shape
 verified: timings come as `segment:[start,end]`), built with 15 unit
 tests, emulator walkthrough (confirm dialog, per-category pickers, auto
-skip + Undo chip + scrubber marks) and a release-signed install on the
-Tab S6. Not yet done: visual check of the "Skip … ›" button and the
-background/PiP skip on a real device, the SponsorBlock credit in
-Settings → Open-source licences and NOTICE, and the AGENTS/README
-wording for the scope change.
+skip + Undo chip + scrubber marks) and a release-signed install on a
+real tablet.
+
+**Finished (2026-10-21):** SponsorBlock credited with its own attribution
+template ("Uses SponsorBlock data licensed used under CC BY-NC-SA 4.0 from
+https://sponsor.ajay.app/") next to the setting, and in a "Third-party
+data" section of `NOTICE` (so also under Settings → Open-source licences),
+with the licence link and the non-commercial constraint. README (intro,
+Features, Security & privacy, Licence) and AGENTS.md §1/§14 describe the
+opt-in exception. On the tablet (release build): auto skip in the app,
+in picture-in-picture, and in the background with the screen off all
+jumped the sponsor and kept playing; a video without chapters works the
+same (checked on the emulator). Left: publish (PR + release), with the
+public AGENTS.md given the same scope wording.
 
 **Review fixes (2026-10-21):** the skip button now shows whenever the
 playhead is inside an enabled segment, not only while the controls are up
