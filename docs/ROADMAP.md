@@ -68,14 +68,18 @@ Behaviour (built 2026-10-19):
 
 ## Chunk 5 — Polish and distribution · small
 
+The visual polish pass and the README refresh shipped in 0.4.1; the
+accessibility pass and the new-version notice are still open.
+
 - Accessibility pass: screen-reader labels and touch targets on the custom
   player controls.
 - Opt-in "new version available" notice from GitHub Releases — off by
   default, so the app still contacts nothing but Plex unless enabled.
-- README refresh: the feature list and screenshots are out of date
-  (no channel play, previous / next, chapters, PiP or background audio
-  yet). Retake the screenshots from the mock server with simulated data
-  only.
+- ~~README refresh~~ — done for 0.4.1: features regrouped (Browse,
+  Watch, Your server) and brought up to date; new phone and tablet
+  screenshots of a fictional demo library served by a throwaway mock
+  server (HTTPS, trusted by a temporary debug-only override that is never
+  committed).
 - Large text sizes clip player labels (seen on a tablet at a raised
   text size): the "Skipped sponsor · Undo" chip cuts "Undo" off (a fixed
   40 dp button box, and no gap after the label), and the quality label in
