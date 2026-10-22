@@ -21,10 +21,10 @@ familiar feed / channels / watch experience instead of Plex's folder
 hierarchy. Tap a video and it plays immediately; keep browsing while it
 plays in a floating miniplayer.
 
-It talks only to *your own* server with *your own* Plex sign-in. No
-accounts, no backend, no analytics, and no third-party services unless
-you switch on the optional *Skip segments* (see
-[Security & privacy](#security--privacy)).
+It talks to *your own* Plex server, and to plex.tv only to sign you in
+and find that server — nothing else, unless you switch on the optional
+*Skip segments* (details under [Security & privacy](#security--privacy)).
+No accounts, no backend, no analytics.
 
 ## Screenshots
 
@@ -41,8 +41,6 @@ you switch on the optional *Skip segments* (see
   <img src="docs/screenshots/tab-channels.png" width="49%" alt="Tablet two-pane channels in dark theme">
   <img src="docs/screenshots/tab-mini.png" width="49%" alt="Tablet Library tab with the miniplayer">
 </p>
-
-<p align="center"><sub>Screenshots use a fictional demo library — every channel, video and thumbnail is made up.</sub></p>
 
 ## Features
 
