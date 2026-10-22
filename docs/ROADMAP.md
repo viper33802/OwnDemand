@@ -108,8 +108,8 @@ largest in-app text size (×1.5). Findings and the fix for each:
    Fix: apply on release with a live preview line; label Smaller /
    Standard / Larger with a percentage.
 5. The "N new" pill squeezes channel names (the tablet rail cuts them to
-   "Adam …" at large sizes). Fix: "58 videos · 3 new" on the subtitle
-   line, in the accent colour.
+   a word or two at large sizes). Fix: the pill moves to the subtitle
+   line, after the video count.
 6. Rail and bottom-bar labels have no single-line rule; at large sizes
    "Channels" already fills the rail. Fix: one line, never wrapping.
 
@@ -126,7 +126,7 @@ largest in-app text size (×1.5). Findings and the fix for each:
 11. Back with the tablet chapter panel open leaves the video instead of
     closing the panel. Fix: Back closes the panel first.
 12. The library picker labels libraries "type: movie". Fix: a plain kind
-    ("Movies", "TV shows", …).
+    ("Movies and videos", "Music", …).
 
 Checked and fine: Settings, Search, Library, channel pages, the watch
 screen and fullscreen at both text sizes (long titles ellipsize), the
