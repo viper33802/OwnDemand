@@ -1,5 +1,6 @@
 package dev.owndemand.app.ui.channels
 
+import dev.owndemand.app.ui.common.AppDropdownMenu
 import dev.owndemand.app.playback.orderChannel
 import dev.owndemand.app.playback.PlayQueue
 import dev.owndemand.app.playback.ChannelOrder
@@ -306,23 +307,30 @@ private fun ChannelRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                "${collection.childCount} video${if (collection.childCount == 1) "" else "s"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (newCount > 0) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "$newCount new",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF4F46E5))
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-            )
+            // The "N new" pill rides on the count line (polish pass): beside
+            // the name it took the name's room, down to "Adam …" on the
+            // tablet rail at large text sizes.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${collection.childCount} video${if (collection.childCount == 1) "" else "s"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                if (newCount > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "$newCount new",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF4F46E5))
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -411,7 +419,7 @@ fun ChannelDetailScreen(
                     Spacer(Modifier.width(4.dp))
                     Text("Play")
                 }
-                DropdownMenu(expanded = playMenuOpen, onDismissRequest = { playMenuOpen = false }) {
+                AppDropdownMenu(expanded = playMenuOpen, onDismissRequest = { playMenuOpen = false }) {
                     ChannelOrder.entries.forEach { order ->
                         DropdownMenuItem(
                             text = { Text(order.label) },
@@ -430,7 +438,7 @@ fun ChannelDetailScreen(
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(painterResource(R.drawable.ic_sort), "Sort")
                 }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                AppDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     HomeSort.entries.filterNot { it == HomeSort.Mixed }.forEach { option ->
                         DropdownMenuItem(
                             text = { Text(option.label) },

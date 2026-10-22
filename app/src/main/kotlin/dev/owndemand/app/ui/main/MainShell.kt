@@ -1,5 +1,8 @@
 package dev.owndemand.app.ui.main
 
+import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
@@ -122,10 +125,17 @@ fun MainShell(
     Scaffold(
         bottomBar = {
             if (!fullscreenNow && !useRail) {
-                // Centred and width-capped (survey A4): on phones (≤560 dp)
-                // this changes nothing; on tablet-portrait widths the three
-                // items no longer scatter to the screen edges.
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                // Items centred and width-capped (survey A4): on phones
+                // (≤560 dp) this changes nothing; on tablet-portrait widths
+                // they no longer scatter to the screen edges. The bar's
+                // colour still spans the full width (polish pass: a 560 dp
+                // slab with gaps either side looked unfinished).
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(androidx.compose.material3.NavigationBarDefaults.containerColor),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
                     NavigationBar(modifier = Modifier.widthIn(max = 560.dp)) {
                         tabs.forEachIndexed { index, tab ->
                             NavigationBarItem(
@@ -137,7 +147,7 @@ fun MainShell(
                                         contentDescription = tab.label,
                                     )
                                 },
-                                label = { Text(tab.label) },
+                                label = { NavLabel(tab.label) },
                             )
                         }
                     }
@@ -179,11 +189,11 @@ fun MainShell(
         if (useRail) {
             Row(Modifier.fillMaxSize()) {
                 NavigationRail(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(top = topPad, bottom = bottomPad),
-                    // Scaffold already applied the window insets around us.
-                    windowInsets = WindowInsets(0.dp),
+                    // Full height, behind the status and gesture bars too
+                    // (polish pass: it used to stop short, leaving a dark
+                    // notch above it); its items stay inside the bars.
+                    modifier = Modifier.fillMaxHeight(),
+                    windowInsets = WindowInsets(top = topPad, bottom = bottomPad),
                 ) {
                     Spacer(Modifier.height(6.dp))
                     IconButton(onClick = mainVm::openSearch) {
@@ -201,7 +211,7 @@ fun MainShell(
                                     contentDescription = tab.label,
                                 )
                             },
-                            label = { Text(tab.label) },
+                            label = { NavLabel(tab.label) },
                         )
                     }
                     Spacer(Modifier.weight(1f))
@@ -214,7 +224,7 @@ fun MainShell(
                                 tabs[SETTINGS_TAB].label,
                             )
                         },
-                        label = { Text(tabs[SETTINGS_TAB].label) },
+                        label = { NavLabel(tabs[SETTINGS_TAB].label) },
                     )
                     Spacer(Modifier.height(6.dp))
                 }
@@ -308,3 +318,27 @@ private fun ShellContent(
         }
     }
 }
+
+/**
+ * A rail / bottom-bar label (polish pass): one line, and it grows with the
+ * text size only up to [NAV_LABEL_MAX_SCALE] — past that "Channels" wraps
+ * or spills out of the 80 dp rail. Fixed chrome, like most apps' tab bars.
+ */
+@Composable
+private fun NavLabel(text: String) {
+    val style = MaterialTheme.typography.labelMedium
+    val scale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+    Text(
+        text,
+        style = if (scale > NAV_LABEL_MAX_SCALE) {
+            style.copy(fontSize = style.fontSize * (NAV_LABEL_MAX_SCALE / scale))
+        } else {
+            style
+        },
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+private const val NAV_LABEL_MAX_SCALE = 1.3f

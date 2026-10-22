@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ splash branding image: the wordmark in the 200 x 80 dp box
+     the system reserves at the foot of the splash. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="200dp" android:height="80dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+    <item
+        android:width="180dp"
+        android:height="40dp"
+        android:drawable="@drawable/brand_wordmark_light"
+        android:gravity="center" />
+</layer-list>

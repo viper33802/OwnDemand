@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import dev.owndemand.app.ui.common.AppDropdownMenu
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -431,7 +433,7 @@ fun VideoPlayer(
         }
         // … and "Skipped sponsor · Undo" for 5 s after an automatic jump;
         // Undo goes back and leaves the stretch alone.
-        SkipUndoChip(manager)
+        SkipUndoChip(manager, controlsVisible, fullscreen)
     }
 }
 
@@ -450,15 +452,7 @@ private fun BoxScope.SkipSegmentButton(
         Modifier
             .align(Alignment.BottomEnd)
             .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
-            .padding(
-                end = 12.dp,
-                // Clear of the bar (lifted 14 dp more in fullscreen).
-                bottom = when {
-                    !controlsVisible -> 16.dp
-                    fullscreen -> 60.dp
-                    else -> 46.dp
-                },
-            )
+            .padding(end = 12.dp, bottom = overlayBottomPadding(controlsVisible, fullscreen))
             .clip(RoundedCornerShape(16.dp))
             .background(Color.Black.copy(alpha = 0.7f))
             .clickable(onClick = onSkip)
@@ -473,32 +467,55 @@ private fun BoxScope.SkipSegmentButton(
     }
 }
 
-/** The Undo chip while the manager offers it (5 s after an automatic skip). */
+/**
+ * Bottom offset for the skip button and the Undo chip: clear of the bar
+ * while the controls are up (lifted 14 dp more in fullscreen), lower while
+ * they are hidden.
+ */
+private fun overlayBottomPadding(controlsVisible: Boolean, fullscreen: Boolean) = when {
+    !controlsVisible -> 16.dp
+    fullscreen -> 60.dp
+    else -> 46.dp
+}
+
+/**
+ * The Undo chip while the manager offers it (5 s after an automatic skip):
+ * bottom left, mirroring the skip button, so it never covers the centre
+ * controls. Both parts size to their text, at any text size.
+ */
 @Composable
-private fun BoxScope.SkipUndoChip(manager: PlaybackManager) {
+private fun BoxScope.SkipUndoChip(manager: PlaybackManager, controlsVisible: Boolean, fullscreen: Boolean) {
     val chip by manager.skipNotice.collectAsStateWithLifecycle()
     val notice = chip ?: return
     Row(
         Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = 76.dp)
+            .align(Alignment.BottomStart)
+            .then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
+            .padding(start = 12.dp, end = 12.dp, bottom = overlayBottomPadding(controlsVisible, fullscreen))
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black.copy(alpha = 0.75f))
-            .padding(start = 14.dp, end = 4.dp),
+            .background(Color.Black.copy(alpha = 0.75f)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Skipped ${notice.label}", color = Color.White, fontSize = 13.sp)
-        IconButton(
-            onClick = { manager.undoSkip() },
-            modifier = Modifier.size(40.dp),
-        ) {
-            Text(
-                "Undo",
-                color = Color(0xFFA78BFA),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-            )
-        }
+        Text(
+            "Skipped ${notice.label}",
+            color = Color.White,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(start = 12.dp, end = 4.dp),
+        )
+        Text(
+            "Undo",
+            color = Color(0xFFA78BFA),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier
+                .clickable(role = androidx.compose.ui.semantics.Role.Button) { manager.undoSkip() }
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+        )
     }
 }
 
@@ -716,7 +733,13 @@ private fun PlayerControls(
                         chapterTitleBounds = null
                     }
                 }
-                IconControl(R.drawable.ic_expand, "Fullscreen", onToggleFullscreen)
+                // Polish pass: in fullscreen this is the way out, so it shows
+                // the exit icon.
+                if (fullscreen) {
+                    IconControl(R.drawable.ic_collapse, "Exit fullscreen", onToggleFullscreen)
+                } else {
+                    IconControl(R.drawable.ic_expand, "Fullscreen", onToggleFullscreen)
+                }
             }
         }
     }
@@ -775,15 +798,8 @@ private fun SpeedControl(manager: PlaybackManager, onMenuOpenChange: (Boolean) -
     var menuOpen by remember { mutableStateOf(false) }
     LaunchedEffect(menuOpen) { onMenuOpenChange(menuOpen) }
     Box {
-        IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(44.dp)) {
-            Text(
-                speedLabel(speed),
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-            )
-        }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+        PlayerTextButton(speedLabel(speed), "Playback speed") { menuOpen = true }
+        AppDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             SPEED_OPTIONS.forEach { option ->
                 DropdownMenuItem(
                     text = {
@@ -803,6 +819,33 @@ private fun SpeedControl(manager: PlaybackManager, onMenuOpenChange: (Boolean) -
 }
 
 /**
+ * A text control in the player's top row (speed, quality): a pill that
+ * grows with its label at any text size, never narrower than a 44 dp touch
+ * target. (A fixed-size icon button clipped "Auto" to "Aut".)
+ */
+@Composable
+private fun PlayerTextButton(label: String, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .heightIn(min = 44.dp)
+            .widthIn(min = 44.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .clickable(onClickLabel = description, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+/**
  * Quality for this video (Chunk 3 follow-up): "Auto" follows the Settings
  * cap for the current network; a choice applies to this video only.
  */
@@ -813,15 +856,8 @@ private fun QualityControl(manager: PlaybackManager, onMenuOpenChange: (Boolean)
     var menuOpen by remember { mutableStateOf(false) }
     LaunchedEffect(menuOpen) { onMenuOpenChange(menuOpen) }
     Box {
-        IconButton(onClick = { menuOpen = true }, modifier = Modifier.height(44.dp).widthIn(min = 44.dp)) {
-            Text(
-                playerQualityLabel(override),
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-            )
-        }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+        PlayerTextButton(playerQualityLabel(override), "Video quality") { menuOpen = true }
+        AppDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
                 text = {
                     Text(
@@ -1131,7 +1167,7 @@ private fun CaptionsControl(
                 modifier = Modifier.size(24.dp),
             )
         }
-        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        AppDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             MenuHeader("Subtitles")
             androidx.compose.material3.DropdownMenuItem(
                 text = { MenuChoice("Off", selected = !captionsOn) },

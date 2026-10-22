@@ -68,6 +68,7 @@ fun VideoActionsSheet(
 ) {
     val options = videoMenuOptions(item, hiddenFromContinue)
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        AppTextScale {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             Text(
                 displayTitle(item.title, item.channelName),
@@ -100,6 +101,7 @@ fun VideoActionsSheet(
             }
             if (options.removeFromContinue) row("Remove from Continue watching", onRemoveFromContinue)()
             if (options.goToChannel) row("Go to channel", onGoToChannel)()
+        }
         }
     }
 }

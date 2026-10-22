@@ -217,6 +217,19 @@ class AppContainer(context: Context) {
     private val _videoActive = kotlinx.coroutines.flow.MutableStateFlow(false)
     val videoActive: kotlinx.coroutines.flow.StateFlow<Boolean> = _videoActive
 
+    private val _launchReady = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /**
+     * The first screen has something to show (settings read, and the
+     * library's first load in or timed out): MainActivity holds the launch
+     * splash until then.
+     */
+    val launchReady: kotlinx.coroutines.flow.StateFlow<Boolean> = _launchReady
+
+    fun markLaunchReady() {
+        _launchReady.value = true
+    }
+
     private val _inPip = kotlinx.coroutines.flow.MutableStateFlow(false)
 
     /** The activity is in picture-in-picture: the UI shows the video only. */

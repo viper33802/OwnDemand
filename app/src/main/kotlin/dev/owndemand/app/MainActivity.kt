@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,6 +28,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = container
+        holdSplashUntilReady(container)
         setContent {
             OwnDemandTheme {
                 CompositionLocalProvider(LocalAppContainer provides container) {
@@ -45,6 +48,33 @@ class MainActivity : ComponentActivity() {
                     pipAllowed = allowed
                     updatePipParams()
                 }
+        }
+    }
+
+    /**
+     * Launch splash (polish pass): the first frame is held — on Android 12+
+     * that keeps the system splash (icon + wordmark) up, before that the
+     * splash window background — until the first screen has content
+     * ([AppContainer.launchReady]), so a launch never flashes the sign-in
+     * screen or an empty feed. Hard-capped in case readiness never comes.
+     */
+    private fun holdSplashUntilReady(container: AppContainer) {
+        val content = findViewById<View>(android.R.id.content)
+        content.viewTreeObserver.addOnPreDrawListener(
+            object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    if (!container.launchReady.value) return false
+                    content.viewTreeObserver.removeOnPreDrawListener(this)
+                    // Below Android 12 the window background is the splash
+                    // itself; from here on it is just the app background.
+                    window.setBackgroundDrawableResource(R.color.app_background)
+                    return true
+                }
+            },
+        )
+        lifecycleScope.launch {
+            kotlinx.coroutines.delay(SPLASH_MAX_MS)
+            container.markLaunchReady()
         }
     }
 
@@ -94,3 +124,6 @@ class MainActivity : ComponentActivity() {
         container.onAppBackground()
     }
 }
+
+/** Longest the launch splash can stay up, whatever happens. */
+private const val SPLASH_MAX_MS = 4_000L

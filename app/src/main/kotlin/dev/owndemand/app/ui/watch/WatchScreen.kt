@@ -284,19 +284,25 @@ fun WatchScreen(
         chapterPositionMs = ms
     }
     val twoPane = mode.useSideRail && !fullscreen
+    // Back closes the two-pane chapter panel first (polish pass; the
+    // phone sheet closes itself). Declared after the screen's own handler,
+    // so it takes precedence while the panel is open.
+    BackHandler(enabled = chaptersOpen && twoPane) { chaptersOpen = false }
     if (chaptersOpen && !twoPane) {
         ModalBottomSheet(onDismissRequest = { chaptersOpen = false }) {
-            ChaptersHeader(chapters.size, onClose = { chaptersOpen = false })
-            ChapterList(
-                chapters = chapters,
-                currentIndex = chapterIndex,
-                artworkFor = { container.repository().artworkUrl(it) },
-                onSeek = { ms ->
-                    seekTo(ms)
-                    chaptersOpen = false
-                },
-                modifier = Modifier.navigationBarsPadding(),
-            )
+            dev.owndemand.app.ui.common.AppTextScale {
+                ChaptersHeader(chapters.size, onClose = { chaptersOpen = false })
+                ChapterList(
+                    chapters = chapters,
+                    currentIndex = chapterIndex,
+                    artworkFor = { container.repository().artworkUrl(it) },
+                    onSeek = { ms ->
+                        seekTo(ms)
+                        chaptersOpen = false
+                    },
+                    modifier = Modifier.navigationBarsPadding(),
+                )
+            }
         }
     }
 
