@@ -29,32 +29,49 @@ you switch on the optional *Skip segments* (see
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/phone-home.png" width="200" alt="Home feed with Continue watching">
-  <img src="docs/screenshots/phone-watch.png" width="200" alt="Watch screen with description and Up next">
-  <img src="docs/screenshots/phone-mini.png" width="200" alt="Channels list with the floating miniplayer">
-  <img src="docs/screenshots/phone-channel-dark.png" width="200" alt="Channel page in dark theme">
+  <img src="docs/screenshots/phone-home.png" width="200" alt="Home feed with Continue watching and New badges">
+  <img src="docs/screenshots/phone-watch.png" width="200" alt="Watch screen with chapters, previous / next and Up next">
+  <img src="docs/screenshots/phone-channel-dark.png" width="200" alt="Channel page with banner and Play, dark theme, miniplayer">
+  <img src="docs/screenshots/phone-menu.png" width="200" alt="Long-press menu on a video">
 </p>
 
 <p align="center">
   <img src="docs/screenshots/tab-home.png" width="49%" alt="Tablet home feed">
-  <img src="docs/screenshots/tab-watch.png" width="49%" alt="Tablet two-pane watch screen">
-  <img src="docs/screenshots/tab-channels.png" width="49%" alt="Tablet two-pane channels">
-  <img src="docs/screenshots/tab-mini.png" width="49%" alt="Tablet miniplayer over a channel">
+  <img src="docs/screenshots/tab-watch.png" width="49%" alt="Tablet two-pane watch screen with the chapter list">
+  <img src="docs/screenshots/tab-channels.png" width="49%" alt="Tablet two-pane channels in dark theme">
+  <img src="docs/screenshots/tab-mini.png" width="49%" alt="Tablet Library tab with the miniplayer">
 </p>
 
 <p align="center"><sub>Screenshots use a fictional demo library — every channel, video and thumbnail is made up.</sub></p>
 
 ## Features
 
+**Browse**
 - **Home** — fresh additions mixed with things you haven't watched yet,
-  plus a *Continue watching* row that resumes where you left off.
-- **Channels** — your Plex Collections presented as channels, with channel
-  artwork; a two-pane channel browser on tablets. **Play** a whole channel
-  oldest first, newest first or shuffled, once through.
-- **Playback-first watch screen** — tap any card and playback starts
-  immediately. Expandable description, *Up next*, previous / next,
-  chapters (segmented scrubber and a chapter list), fullscreen, captions,
-  scrub previews, double-tap seek, pinch-to-zoom.
+  a *Continue watching* row, and **New** badges on videos added in the
+  last week. Sort by newest, oldest, title or length; pull down to
+  refresh.
+- **Channels** — your Plex Collections presented as channels, with
+  channel art, banners and a count of new videos; a two-pane channel
+  browser on tablets. **Play** a whole channel oldest first, newest first
+  or shuffled, once through.
+- **Library** — everything you're part-way through, and what you watched
+  recently.
+- **Search** across the selected library — titles and channel names.
+- **Long-press any video** to mark it watched or unwatched, remove it from
+  *Continue watching*, or go to its channel.
+
+**Watch**
+- **Playback-first** — tap any card and playback starts immediately,
+  with the description, upload date and *Up next* below the player.
+- **Chapters** — a segmented progress bar, the current chapter's name,
+  and a chapter list with thumbnails; timestamps in descriptions are
+  tappable.
+- **Player controls** — previous / next, double-tap to skip 10 seconds,
+  scrub previews, speed, pinch-to-zoom, fullscreen, captions and audio
+  tracks.
+- **Autoplay** — the next video starts after a short countdown (on/off in
+  Settings).
 - **Miniplayer** — drag the video down (or switch tabs) and it keeps
   playing in a floating, draggable miniplayer while you browse.
 - **Picture-in-picture and background audio** — leave the app and the
@@ -66,15 +83,20 @@ you switch on the optional *Skip segments* (see
   [SponsorBlock](https://sponsor.ajay.app/) community, for videos whose
   file names carry the source video's id (as Youtarr's do). Per category:
   skip automatically (with Undo), show a skip button, or off; marked
-  stretches show on the scrubber.
-- **Search** across the selected library — titles and channel names.
+  stretches show on the progress bar.
+
+**Your server, your settings**
 - **Resume & watched state** synced back to Plex, so other Plex clients
   stay in step.
-- **Direct play** when the device can decode the file, Plex's own
-  transcoder when it can't, and a data-saver mode.
-- **Adaptive layouts** for phones, tablet portrait, and tablet landscape
+- **Quality** — separate limits on Wi-Fi and mobile data, plus a per-video
+  choice in the player. Direct play when the device can decode the file,
+  Plex's own transcoder when it can't.
+- **At home and away** — the app keeps every HTTPS address Plex offers
+  for your server and uses whichever answers, so it keeps working when
+  you leave the house.
+- **Adaptive layouts** for phones, tablet portrait and tablet landscape
   (side navigation, multi-column grids, two-pane watch screen); light and
-  dark themes.
+  dark themes; an app-wide **Text size** setting.
 
 ## How it fits together
 
