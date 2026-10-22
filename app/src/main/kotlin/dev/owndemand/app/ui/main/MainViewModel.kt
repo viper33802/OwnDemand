@@ -15,7 +15,12 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(private val container: AppContainer) : ViewModel() {
     val settings: StateFlow<AppSettings> = container.settingsRepository.settings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings("", null, null, null))
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            // Not the user's state, just "not read yet": see AppSettings.loaded.
+            AppSettings("", null, null, null, loaded = false),
+        )
 
     // Navigation state lives here (not in composables) so it survives the
     // watch screen replacing the shell: back from playback returns to the

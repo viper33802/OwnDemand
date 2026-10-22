@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch splash below Android 12 (the window background until the first
+     screen is ready): the app icon centred, the wordmark near the foot. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/app_background" />
+    <item
+        android:width="192dp"
+        android:height="192dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
+    <item
+        android:width="180dp"
+        android:height="40dp"
+        android:bottom="64dp"
+        android:drawable="@drawable/brand_wordmark_light"
+        android:gravity="bottom|center_horizontal" />
+</layer-list>

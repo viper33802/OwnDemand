@@ -16,6 +16,8 @@ import dev.owndemand.app.ui.setup.ConnectScreen
 import dev.owndemand.app.ui.setup.LibraryPickerScreen
 import dev.owndemand.app.ui.setup.LibraryPickerViewModel
 import dev.owndemand.app.ui.setup.SetupViewModel
+import dev.owndemand.app.ui.common.LocalAppDensity
+import kotlinx.coroutines.flow.first
 
 /**
  * Root navigation, derived from persisted settings rather than imperative
@@ -37,6 +39,23 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
     settings.server?.let { container.currentServer = it }
     settings.library?.let { container.currentSectionKey = it.key }
 
+    // Launch (polish pass): MainActivity keeps the splash up until the
+    // first real screen has content — the saved settings, and for a set-up
+    // app the library's first load (or its error), capped so a slow or
+    // unreachable server never holds the splash for long.
+    androidx.compose.runtime.LaunchedEffect(settings.loaded) {
+        if (!settings.loaded) return@LaunchedEffect
+        if (settings.isReady) {
+            val index = container.libraryIndex
+            kotlinx.coroutines.withTimeoutOrNull(LAUNCH_WAIT_MS) {
+                kotlinx.coroutines.flow.combine(index.items, index.error) { items, error ->
+                    items != null || error != null
+                }.first { it }
+            }
+        }
+        container.markLaunchReady()
+    }
+
     // App-wide text size (user request 2026-10-16): multiply the system
     // font scale by the Settings slider. Overriding density here scales
     // every sp size in the app — including the Settings screen itself, so
@@ -54,12 +73,21 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
         PipVideo(container.playbackManager().player)
         return
     }
+    val appDensity = Density(systemDensity.density, systemDensity.fontScale * fontScale)
     CompositionLocalProvider(
-        LocalDensity provides
-            Density(systemDensity.density, systemDensity.fontScale * fontScale),
+        LocalDensity provides appDensity,
+        LocalAppDensity provides appDensity,
         LocalLayoutMode provides layoutMode,
     ) {
         when {
+            // Saved settings not read yet: nothing to decide on (the splash
+            // is still up) — never flash the sign-in screen.
+            !settings.loaded -> androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.material3.MaterialTheme.colorScheme.background),
+            )
+
             !settings.isSignedIn || !settings.hasServer -> {
                 val vm: SetupViewModel = containerViewModel { SetupViewModel(it) }
                 ConnectScreen(vm, signedIn = settings.isSignedIn)
@@ -103,3 +131,6 @@ private fun PipVideo(player: androidx.media3.exoplayer.ExoPlayer) {
         )
     }
 }
+
+/** Longest the launch splash waits for the library's first load. */
+private const val LAUNCH_WAIT_MS = 2_500L

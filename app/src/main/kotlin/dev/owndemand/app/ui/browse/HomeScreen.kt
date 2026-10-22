@@ -1,5 +1,6 @@
 package dev.owndemand.app.ui.browse
 
+import dev.owndemand.app.ui.common.AppDropdownMenu
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import dev.owndemand.app.ui.common.videoClickable
@@ -36,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -131,8 +133,14 @@ fun HomeScreen(
             // frame would pin the grid to the bottom once the feed is
             // inserted above it; unkeyed, the grid stays at index 0.
             if (state.loading) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (state.feed.isEmpty()) {
+                    // First load (polish pass): the shape of the feed while
+                    // it arrives, instead of an empty page under a hairline.
+                    items(SKELETON_CARDS) { SkeletonCard() }
+                } else {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
                 }
             }
             state.error?.let { message ->
@@ -207,7 +215,7 @@ private fun HomeControls(
             IconButton(onClick = { menuOpen = true }) {
                 Icon(painterResource(R.drawable.ic_sort), "Sort")
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            AppDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 HomeSort.entries.filterNot { it == HomeSort.Mixed }.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option.label) },
@@ -442,6 +450,48 @@ private fun ThumbnailBadge(
                     .clip(RoundedCornerShape(2.dp))
                     .background(Color.Black.copy(alpha = 0.8f))
                     .padding(horizontal = 4.dp, vertical = 1.dp),
+            )
+        }
+    }
+}
+
+/** Placeholder cards on Home's first load. */
+private const val SKELETON_CARDS = 6
+
+/** A feed card's outline (thumbnail, title, subtitle), gently pulsing. */
+@Composable
+private fun SkeletonCard() {
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val alpha by pulse.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.9f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween<Float>(800),
+            androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "skeleton-alpha",
+    )
+    val shade = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(shade),
+        )
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Box(
+                Modifier
+                    .fillMaxWidth(0.85f)
+                    .height(14.dp)
+                    .background(shade, RoundedCornerShape(4.dp)),
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(12.dp)
+                    .background(shade, RoundedCornerShape(4.dp)),
             )
         }
     }

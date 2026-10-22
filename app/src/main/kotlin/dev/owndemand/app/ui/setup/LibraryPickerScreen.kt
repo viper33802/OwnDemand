@@ -91,7 +91,7 @@ private fun LibraryCard(library: PlexLibrary, onSelect: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(library.title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "type: ${library.type}",
+                    libraryKindLabel(library.type),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -99,4 +99,13 @@ private fun LibraryCard(library: PlexLibrary, onSelect: () -> Unit) {
             Button(onClick = onSelect) { Text("Use") }
         }
     }
+}
+
+/** Plex's library type in plain words (polish pass; was "type: movie"). */
+fun libraryKindLabel(type: String): String = when (type) {
+    "movie" -> "Movies and videos"
+    "show" -> "TV shows"
+    "artist" -> "Music"
+    "photo" -> "Photos"
+    else -> type.replaceFirstChar { it.uppercase() }
 }

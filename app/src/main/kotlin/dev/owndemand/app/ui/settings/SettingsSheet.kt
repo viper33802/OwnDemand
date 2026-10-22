@@ -1,5 +1,7 @@
 package dev.owndemand.app.ui.settings
 
+import dev.owndemand.app.ui.common.AppTextScale
+import dev.owndemand.app.ui.common.AppDropdownMenu
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -166,10 +169,18 @@ fun SettingsSheet(
         Spacer(Modifier.height(20.dp))
 
         // Text size (user request 2026-10-16): multiplies the system font
-        // scale app-wide; the whole screen rescales as it is dragged.
+        // scale app-wide. While dragging only the sample line below the
+        // slider follows the thumb; the app rescales on release (polish
+        // pass) — rescaling live reflowed the page and slid the slider out
+        // from under the finger.
+        var dragScale by remember { mutableStateOf<Float?>(null) }
+        // Released but not saved yet: keeps the thumb from snapping back.
+        var pendingScale by remember { mutableStateOf<Float?>(null) }
+        LaunchedEffect(settings.fontScale) { pendingScale = null }
+        val shownScale = dragScale ?: pendingScale ?: settings.fontScale
         Text("Text size", style = MaterialTheme.typography.bodyLarge)
         Text(
-            if (settings.fontScale == 1f) "Standard" else "Larger text everywhere",
+            textSizeLabel(shownScale),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -181,15 +192,30 @@ fun SettingsSheet(
         ) {
             Text("A", style = MaterialTheme.typography.labelMedium)
             Slider(
-                value = settings.fontScale,
-                onValueChange = onFontScaleChange,
-                valueRange = 0.85f..1.5f,
+                value = shownScale,
+                onValueChange = { dragScale = it },
+                onValueChangeFinished = {
+                    dragScale?.let { scale ->
+                        pendingScale = scale
+                        onFontScaleChange(scale)
+                    }
+                    dragScale = null
+                },
+                valueRange = TEXT_SCALE_MIN..TEXT_SCALE_MAX,
+                // 5 % steps, so Standard (100 %) is a stop of its own.
+                steps = TEXT_SCALE_STEPS,
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 10.dp),
             )
             Text("A", style = MaterialTheme.typography.headlineSmall)
         }
+        // The sample: what titles will look like at the thumb's size.
+        val sample = MaterialTheme.typography.titleSmall
+        Text(
+            "Video titles will look like this",
+            style = sample.copy(fontSize = sample.fontSize * (shownScale / settings.fontScale)),
+        )
 
         Spacer(Modifier.height(24.dp))
         HorizontalDivider()
@@ -250,8 +276,9 @@ fun SettingsSheet(
     if (confirmSkipOn) {
         AlertDialog(
             onDismissRequest = { confirmSkipOn = false },
-            title = { Text("Contact SponsorBlock?") },
+            title = { AppTextScale { Text("Contact SponsorBlock?") } },
             text = {
+                AppTextScale {
                 Text(
                     "So far this app has talked to nothing but Plex. Turning Skip segments on " +
                         "adds one exception: when a video starts, the app asks SponsorBlock " +
@@ -261,6 +288,7 @@ fun SettingsSheet(
                         "server address or device details are ever sent, and the app never " +
                         "submits or votes on segments. You can switch this off again at any time.",
                 )
+                }
             },
             confirmButton = {
                 TextButton(
@@ -268,10 +296,10 @@ fun SettingsSheet(
                         confirmSkipOn = false
                         onSkipSegmentsChange(true)
                     },
-                ) { Text("Turn on") }
+                ) { AppTextScale { Text("Turn on") } }
             },
             dismissButton = {
-                TextButton(onClick = { confirmSkipOn = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmSkipOn = false }) { AppTextScale { Text("Cancel") } }
             },
         )
     }
@@ -289,10 +317,17 @@ private fun SkipModeRow(
         Modifier.fillMaxWidth().widthIn(max = 480.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Name and mode share the width (polish pass): at the largest text
+        // sizes the mode used to take it all and break the name mid-word
+        // ("Self-prom / otion"). The row shows the mode's short words, so
+        // they wrap between words, never inside one; the menu has the
+        // full wording.
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        Box {
-            TextButton(onClick = { open = true }) { Text(skipModeLabel(mode)) }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            TextButton(onClick = { open = true }) {
+                Text(skipModeShortLabel(mode), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            }
+            AppDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 dev.owndemand.app.playback.SkipMode.entries.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(skipModeLabel(option)) },
@@ -307,7 +342,14 @@ private fun SkipModeRow(
     }
 }
 
-/** Row text for a category's behaviour. */
+/** A category's behaviour in its row: short words that wrap cleanly. */
+fun skipModeShortLabel(mode: dev.owndemand.app.playback.SkipMode): String = when (mode) {
+    dev.owndemand.app.playback.SkipMode.Auto -> "Auto-skip"
+    dev.owndemand.app.playback.SkipMode.Button -> "Skip button"
+    dev.owndemand.app.playback.SkipMode.Off -> "Off"
+}
+
+/** Menu text for a category's behaviour. */
 fun skipModeLabel(mode: dev.owndemand.app.playback.SkipMode): String = when (mode) {
     dev.owndemand.app.playback.SkipMode.Auto -> "Skip automatically"
     dev.owndemand.app.playback.SkipMode.Button -> "Show a skip button"
@@ -333,6 +375,7 @@ private fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        AppTextScale {
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.readableWidth().padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -352,6 +395,7 @@ private fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
                 )
             }
         }
+        }
     }
 }
 
@@ -366,7 +410,7 @@ private fun QualityRow(label: String, value: VideoQuality, onChange: (VideoQuali
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Box {
             TextButton(onClick = { open = true }) { Text(value.label) }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            AppDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 VideoQuality.entries.forEach { q ->
                     DropdownMenuItem(
                         text = { Text(q.label) },
@@ -415,5 +459,19 @@ private fun SwitchRow(
         }
         Spacer(Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+private const val TEXT_SCALE_MIN = 0.85f
+private const val TEXT_SCALE_MAX = 1.5f
+private const val TEXT_SCALE_STEPS = 12
+
+/** "Standard", or "Smaller · 90 %" / "Larger · 130 %". */
+fun textSizeLabel(scale: Float): String {
+    val percent = kotlin.math.round(scale * 100).toInt()
+    return when {
+        percent == 100 -> "Standard"
+        percent < 100 -> "Smaller · $percent %"
+        else -> "Larger · $percent %"
     }
 }

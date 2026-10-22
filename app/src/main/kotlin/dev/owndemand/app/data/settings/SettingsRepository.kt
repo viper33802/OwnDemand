@@ -52,6 +52,11 @@ data class AppSettings(
     /** Per-category behaviour; defaults per the plan when never edited. */
     val skipModes: Map<dev.owndemand.app.playback.SegmentCategory, dev.owndemand.app.playback.SkipMode> =
         dev.owndemand.app.playback.defaultSkipModes(),
+    /**
+     * False only for the placeholder shown before the saved settings have
+     * been read: the root waits on it instead of showing sign-in.
+     */
+    val loaded: Boolean = true,
 ) {
     val isSignedIn: Boolean get() = accountToken != null
     val hasServer: Boolean get() = server != null

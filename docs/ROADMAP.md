@@ -82,6 +82,87 @@ Behaviour (built 2026-10-19):
   the player's top bar shows "Aut" instead of "Auto". Let both grow with
   the text size.
 
+### Visual polish pass (review 2026-10-21)
+
+Reviewed every screen on the emulator in phone (1080×2340 @420), tablet
+portrait and tablet landscape, dark and light, at standard text and at the
+largest in-app text size (×1.5). Findings and the fix for each:
+
+**Launch**
+1. Every launch flashes the sign-in screen, then a near-empty Home for
+   about a second. The root starts from a placeholder "signed out" state
+   until saved settings load. Fix: a branded splash (app icon on the app
+   background, wordmark below on Android 12+) held until settings are
+   known and the library's first load is in (capped at 2.5 s); skeleton
+   cards on Home if it is still loading after that.
+
+**Text size**
+2. Text in fixed-size icon buttons clips: quality "Aut", Undo chip
+   "Und". Fix: pill text buttons that grow with their text.
+3. Menus, bottom sheets and dialogs ignore the in-app text size (sort,
+   play, speed, quality, captions and skip-mode menus; the long-press and
+   chapter sheets; the licences and confirm dialogs): they open in a new
+   window that resets the scale. Fix: re-apply the app's scale inside them.
+4. The Text size slider slides away while it is dragged (the page above it
+   reflows live), and says "Larger text everywhere" even when set smaller.
+   Fix: apply on release with a live preview line; label Smaller /
+   Standard / Larger with a percentage.
+5. The "N new" pill squeezes channel names (the tablet rail cuts them to
+   "Adam …" at large sizes). Fix: "58 videos · 3 new" on the subtitle
+   line, in the accent colour.
+6. Rail and bottom-bar labels have no single-line rule; at large sizes
+   "Channels" already fills the rail. Fix: one line, never wrapping.
+
+**Layout**
+7. On phones the Undo chip sits on top of the play controls. Fix: bottom
+   left, just above the bar (the skip button keeps the bottom right).
+8. Tablet portrait: the bottom bar is a 560 dp slab with gaps either
+   side. Fix: full-width bar, items still centred.
+9. Tablet landscape: the side rail stops below the status bar, leaving a
+   dark notch above it (clearest on the watch screen). Fix: the rail's
+   colour runs the full height.
+10. In fullscreen the fullscreen button still shows "enter fullscreen".
+    Fix: an exit-fullscreen icon there.
+11. Back with the tablet chapter panel open leaves the video instead of
+    closing the panel. Fix: Back closes the panel first.
+12. The library picker labels libraries "type: movie". Fix: a plain kind
+    ("Movies", "TV shows", …).
+
+Checked and fine: Settings, Search, Library, channel pages, the watch
+screen and fullscreen at both text sizes (long titles ellipsize), the
+light theme, the miniplayer. The miniplayer went black once after a theme
+switch on the emulator (its known decoder stalls); check on a device.
+
+**Built (2026-10-21):** all twelve. Notes on how:
+- Splash: Android 12+ uses the system splash (`values-v31` themes: app
+  background, icon, wordmark as the branding image); older versions show
+  `splash_window` as the window background. `MainActivity` holds the first
+  frame until `AppContainer.launchReady`, which the root sets once settings
+  are read and the library's first load is in (2.5 s cap; 4 s hard cap in
+  the activity). `AppSettings.loaded` marks the placeholder settings, so
+  the root never decides "signed out" before reading them.
+- Popups: `ui/common/AppTextScale.kt` — `LocalAppDensity`,
+  `AppTextScale { }` and `AppDropdownMenu` (use it for every new menu).
+- Rail / bottom-bar labels grow with the text size up to ×1.3, then stay.
+- Emulator re-check: launch (splash straight to Home), tablet landscape
+  at ×1.5 (rail, channel rows, menus, player row, Undo chip, chapter
+  Back, fullscreen icon, slider drag), tablet portrait (full-width bar)
+  and phone.
+- Device check (release build): an Android 12 tablet (system splash) at
+  about ×1.7 overall text, and an Android 11 phone (window-background
+  splash) at standard and ×1.7. Both launch from the splash straight to a
+  loaded Home; menus, sheets, the player's top row, the Undo chip and the
+  skip button are whole at every size; the slider responds to taps and
+  drags.
+13. Found on the phone at ×1.7: in the Skip segments rows the mode text
+    took the whole width and broke category names mid-word. Now name and
+    mode share the row, and the row shows short mode words ("Auto-skip",
+    "Skip button", "Off"); the menu keeps the full wording.
+
+Left as is: on a phone's small inline player with the controls up, the
+Undo chip's top edge touches the "previous" button's circle (both stay
+readable and tappable).
+
 ## Chunk 6 — Android TV · review first, then large
 
 1. **Spike:** install the current app on an Android TV device and record what breaks
