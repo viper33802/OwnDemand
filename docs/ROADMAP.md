@@ -68,6 +68,9 @@ Behaviour (built 2026-10-19):
 
 ## Chunk 5 — Polish and distribution · small
 
+The visual polish pass and the README refresh shipped in 0.4.1; the
+accessibility pass and the new-version notice are still open.
+
 - Accessibility pass: screen-reader labels and touch targets on the custom
   player controls.
 - Opt-in "new version available" notice from GitHub Releases — off by
