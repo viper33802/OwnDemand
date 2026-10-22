@@ -427,4 +427,9 @@ listing), that's a build flavour in `main`, not a branch.
 
 ## Not planned
 
-Chromecast and offline downloads (large; revisit separately if wanted).
+- **Casting:** held (2026-10-21). The app stays free of closed-source
+  libraries, which rules out Google's Cast SDK. To revisit once Chunk 6
+  (Android TV) works: the phone app could hand playback to OwnDemand
+  running on the TV. A sender written against the open Cast protocol was
+  the other option considered.
+- **Offline downloads** (large; revisit separately if wanted).
