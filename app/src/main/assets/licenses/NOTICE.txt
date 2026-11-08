@@ -16,7 +16,8 @@ The OwnDemand app includes the following open-source libraries, each
 distributed under the Apache License, Version 2.0:
 
 - AndroidX (Activity, AppCompat, Core, Lifecycle, Navigation, DataStore,
-  Compose UI / Foundation / Material 3, Window and related libraries)
+  Compose UI / Foundation / Material 3, TV Material, Window and related
+  libraries)
   Copyright The Android Open Source Project
 - AndroidX Media3 / ExoPlayer
   Copyright The Android Open Source Project
