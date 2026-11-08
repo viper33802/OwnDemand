@@ -8,9 +8,9 @@ Guidance for contributors and coding agents working in this repository.
 familiar video-app-style browsing and playback experience for channel videos
 stored in the user's own Plex Media Server library.
 
-- The app only ever connects to the user's own Plex server (and plex.tv for
-  sign-in and server discovery). It has no backend and no third-party
-  services of its own.
+- The app only ever connects to plex.tv (sign-in and server discovery) and
+  the Plex server the user picked — their own, or one shared with their
+  account. It has no backend and no third-party services of its own.
 - **One opt-in exception:** the *Skip segments* setting, off by default,
   sends a read-only lookup to SponsorBlock (`sponsor.ajay.app`) as each
   video starts — only the first 4 hex characters of a SHA-256 hash of the
@@ -31,13 +31,17 @@ library", or "the source platform".
 
 ### In scope
 - Android phones and tablets (native Kotlin app).
+- Android TV: the same app with a separate remote-first interface
+  (`ui/tv`, design in `docs/TV-PLAN.md`).
 - Plex Media Server integration: browsing, search, playback.
 - Plex Collections presented as channels.
-- Secure configuration for any user's Plex server.
+- Secure configuration for any user's Plex server, including servers
+  shared with their account (listed after their own, labelled with the
+  owner's name).
 - Public source code and self-hosted use.
 
 ### Out of scope (unless explicitly approved)
-- iOS, tvOS, Android TV.
+- iOS, tvOS.
 - Downloading from the source platform.
 - Replacing or modifying Youtarr or other ingestion tools.
 - A hosted backend, user accounts, or app-specific cloud services.
@@ -110,7 +114,9 @@ Tablet layouts are described in `docs/TABLET-PLAN.md`; player anatomy in
 ## 6. Technology & Architecture
 
 - Kotlin, Jetpack Compose, AndroidX Media3 / ExoPlayer, OkHttp, Coil,
-  kotlinx.serialization, DataStore, Gradle.
+  kotlinx.serialization, DataStore, Gradle; AndroidX TV Material for the
+  Android TV interface. Prefer in-house code to new libraries (the QR code
+  on the TV sign-in screen is drawn in-house) and ask before adding one.
 - Keep clear boundaries between UI, the Plex API client and auth, library
   data access, playback, persistent configuration, and tests.
 - Manual dependency container (`AppContainer`) — no DI framework.
@@ -137,7 +143,7 @@ Tablet layouts are described in `docs/TABLET-PLAN.md`; player anatomy in
 - Never log tokens or full server URLs; never show tokens in the UI,
   screenshots, example configuration, or diagnostics.
 - Never transmit Plex credentials to any service other than plex.tv and the
-  user's own server. The SponsorBlock client (`data/segments/`) must stay
+  Plex server the user picked. The SponsorBlock client (`data/segments/`) must stay
   separate from the Plex HTTP clients and send nothing Plex-related.
 - Handle sign-out and credential removal safely.
 
@@ -194,9 +200,12 @@ output or API behaviour.
 
 ## 11. Status
 
-Feature-complete proof of concept for phones and tablets: connection and
-sign-in, library selection, home feed, channels, watch/playback with
-miniplayer, search, settings, captions, and scrub previews.
+Phones, tablets and Android TV: sign-in (browser, plex.tv/link code or QR
+on TV), own and shared servers, library selection, home feed, channels
+(with play-a-channel), Library tab, search, watch/playback with
+miniplayer, picture-in-picture and background audio, quality caps,
+captions and track menus, chapters, scrub previews, playback speed, and
+opt-in Skip segments. Planned work is in `docs/ROADMAP.md`.
 
 Licensed under Apache 2.0 (`LICENSE`, `NOTICE`). Releases are signed APKs
 published as GitHub Release assets; the process is in `docs/RELEASING.md`.
