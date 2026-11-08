@@ -70,7 +70,7 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
     // Picture-in-picture (Chunk 4): the small window shows the video only.
     val inPip by container.inPip.collectAsStateWithLifecycle()
     if (inPip && settings.hasLibrary) {
-        PipVideo(container.playbackManager().player)
+        PipVideo(container.playbackManager())
         return
     }
     val appDensity = Density(systemDensity.density, systemDensity.fontScale * fontScale)
@@ -112,7 +112,10 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
  * TextureView for zoom / pan.
  */
 @Composable
-private fun PipVideo(player: androidx.media3.exoplayer.ExoPlayer) {
+private fun PipVideo(manager: dev.owndemand.app.playback.PlaybackManager) {
+    // The small window shows a playing video, so it holds the screen the
+    // same way the in-app surface does (see PlayerSurface).
+    val keepScreenOn by manager.keepScreenOn.collectAsStateWithLifecycle()
     androidx.compose.foundation.layout.Box(
         androidx.compose.ui.Modifier
             .fillMaxSize()
@@ -125,7 +128,10 @@ private fun PipVideo(player: androidx.media3.exoplayer.ExoPlayer) {
                     .inflate(dev.owndemand.app.R.layout.player_surface_pip, null, false)
                     as androidx.media3.ui.PlayerView
             },
-            update = { it.player = player },
+            update = {
+                it.player = manager.player
+                it.keepScreenOn = keepScreenOn
+            },
             // Hand the player back cleanly when PiP ends.
             onRelease = { it.player = null },
         )

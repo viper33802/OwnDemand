@@ -61,6 +61,9 @@ fun FloatingMiniPlayer(
 ) {
     val item by manager.currentItem.collectAsStateWithLifecycle()
     val current = item ?: return
+    // Keep the screen on while the card shows a playing video (see
+    // PlayerSurface: Media3's PlayerView leaves this to the app).
+    val keepScreenOn by manager.keepScreenOn.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -133,7 +136,10 @@ fun FloatingMiniPlayer(
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         }
                 },
-                update = { it.player = manager.player },
+                update = {
+                    it.player = manager.player
+                    it.keepScreenOn = keepScreenOn
+                },
                 onRelease = { it.player = null },
                 modifier = Modifier.matchParentSize(),
             )

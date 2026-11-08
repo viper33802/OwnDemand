@@ -415,9 +415,9 @@ private fun ThumbnailBadge(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(PillShape)
                     .background(Color(0xFF4F46E5))
-                    .padding(horizontal = 5.dp, vertical = 1.dp),
+                    .padding(horizontal = 7.dp, vertical = 1.dp),
             )
         }
         if (item.isFullyWatched) {
@@ -425,9 +425,9 @@ private fun ThumbnailBadge(
                 Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(PillShape)
                     .background(Color.Black.copy(alpha = 0.8f))
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                    .padding(horizontal = 7.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -447,13 +447,16 @@ private fun ThumbnailBadge(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .clip(PillShape)
                     .background(Color.Black.copy(alpha = 0.8f))
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                    .padding(horizontal = 7.dp, vertical = 1.dp),
             )
         }
     }
 }
+
+/** The thumbnail badges (New, Watched, duration) are pills. */
+private val PillShape = RoundedCornerShape(percent = 50)
 
 /** Placeholder cards on Home's first load. */
 private const val SKELETON_CARDS = 6

@@ -103,6 +103,7 @@ fun VideoPlayer(
     val isBuffering by manager.isBuffering.collectAsStateWithLifecycle()
     val reconnecting by manager.reconnecting.collectAsStateWithLifecycle()
     val skipSegments by manager.skipSegments.collectAsStateWithLifecycle()
+    val keepScreenOn by manager.keepScreenOn.collectAsStateWithLifecycle()
 
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -192,6 +193,7 @@ fun VideoPlayer(
     Box(modifier = modifier.background(Color.Black)) {
         PlayerSurface(
             player = player,
+            keepScreenOn = keepScreenOn,
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer {
@@ -522,9 +524,17 @@ private fun BoxScope.SkipUndoChip(manager: PlaybackManager, controlsVisible: Boo
 /**
  * Video surface via Media3 PlayerView. TextureView (not SurfaceView) so
  * Compose graphicsLayer zoom/pan transforms apply to the frames (spec §3).
+ *
+ * Keep-screen-on lives here (owner report 2026-10-21): Media3's PlayerView
+ * no longer holds the screen itself (the old ExoPlayer view did; the docs
+ * now leave it to the app, developer.android.com/media/media3/ui/playerview).
+ * View.keepScreenOn holds the window flag only while this surface is on
+ * screen and only while a video is set to play (PlaybackManager.keepScreenOn,
+ * which also covers rebuffering) — paused, ended or hidden, the device
+ * sleeps on its own timeout, and the power button still works.
  */
 @Composable
-private fun PlayerSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
+private fun PlayerSurface(player: ExoPlayer, keepScreenOn: Boolean, modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
@@ -532,7 +542,10 @@ private fun PlayerSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
                 .inflate(R.layout.player_surface, null, false) as PlayerView)
                 .apply { useController = false }
         },
-        update = { it.player = player },
+        update = {
+            it.player = player
+            it.keepScreenOn = keepScreenOn
+        },
     )
 }
 

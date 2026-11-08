@@ -330,6 +330,11 @@ class PlaybackManager(
                 addListener(object : Player.Listener {
                     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                         _wantsToPlay.value = playWhenReady && _currentItem.value != null
+                        updateKeepScreenOn()
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        updateKeepScreenOn()
                     }
 
                     override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -378,6 +383,20 @@ class PlaybackManager(
     /** A video is loaded and set to play (also while buffering): PiP-worthy. */
     private val _wantsToPlay = MutableStateFlow(false)
     val wantsToPlay: StateFlow<Boolean> = _wantsToPlay.asStateFlow()
+
+    /**
+     * The video surfaces hold the screen on while this is true: set to play
+     * and ready or buffering. Unlike [isPlaying] it stays on through a
+     * rebuffer, which would otherwise let an idle device dim mid-video; it
+     * goes off on pause, at the end, on an error and on stop.
+     */
+    private val _keepScreenOn = MutableStateFlow(false)
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
+    private fun updateKeepScreenOn() {
+        _keepScreenOn.value = _currentItem.value != null && player.playWhenReady &&
+            (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+    }
 
     /** Width / height of the playing video (picture-in-picture window shape). */
     private val _videoAspect = MutableStateFlow(16f / 9f)
@@ -831,6 +850,7 @@ class PlaybackManager(
         _currentItem.value = null
         _isPlaying.value = false
         _wantsToPlay.value = false
+        _keepScreenOn.value = false
         _reconnecting.value = false
         previewPartId = null
         _bifIndex.value = null
