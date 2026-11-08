@@ -16,6 +16,8 @@ import org.junit.Test
 
 class QualityDecisionTest {
 
+    private val anyDecoder = DecoderSupport { _, _, _ -> true }
+
     private fun video(height: Int) = ItemDto(
         ratingKey = "1", duration = 600_000,
         Media = listOf(
@@ -36,21 +38,21 @@ class QualityDecisionTest {
 
     @Test
     fun `original plays the file as-is`() {
-        assertNotNull(PlaybackDecision.directPlayPart(video(1080), VideoQuality.Original))
+        assertNotNull(PlaybackDecision.directPlayPart(video(1080), VideoQuality.Original, anyDecoder))
     }
 
     @Test
     fun `a cap plays videos at or below it as-is and converts taller ones`() {
-        assertNotNull(PlaybackDecision.directPlayPart(video(1080), VideoQuality.Q1080))
-        assertNotNull(PlaybackDecision.directPlayPart(video(720), VideoQuality.Q720))
-        assertNull(PlaybackDecision.directPlayPart(video(1080), VideoQuality.Q720))
-        assertNull(PlaybackDecision.directPlayPart(video(720), VideoQuality.Q480))
+        assertNotNull(PlaybackDecision.directPlayPart(video(1080), VideoQuality.Q1080, anyDecoder))
+        assertNotNull(PlaybackDecision.directPlayPart(video(720), VideoQuality.Q720, anyDecoder))
+        assertNull(PlaybackDecision.directPlayPart(video(1080), VideoQuality.Q720, anyDecoder))
+        assertNull(PlaybackDecision.directPlayPart(video(720), VideoQuality.Q480, anyDecoder))
     }
 
     @Test
     fun `unknown height never exceeds a cap`() {
-        assertNull(PlaybackDecision.directPlayPart(video(0), VideoQuality.Q720))
-        assertNotNull(PlaybackDecision.directPlayPart(video(0), VideoQuality.Original))
+        assertNull(PlaybackDecision.directPlayPart(video(0), VideoQuality.Q720, anyDecoder))
+        assertNotNull(PlaybackDecision.directPlayPart(video(0), VideoQuality.Original, anyDecoder))
     }
 
     @Test

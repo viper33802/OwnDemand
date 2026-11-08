@@ -1,5 +1,6 @@
 package dev.owndemand.app.data
 
+import dev.owndemand.app.data.plex.DecoderSupport
 import dev.owndemand.app.data.plex.PlaybackDecision
 import dev.owndemand.app.data.plex.PmsClient
 import dev.owndemand.app.data.plex.dto.CollectionDto
@@ -10,6 +11,7 @@ import dev.owndemand.app.domain.PlexServer
 class PlexRepository(
     private val client: PmsClient,
     private val server: PlexServer,
+    private val decoders: DecoderSupport,
 ) {
     val accessToken: String get() = server.accessToken
 
@@ -36,13 +38,16 @@ class PlexRepository(
     /**
      * Stream URI + mime type for an item, decided client-side
      * (see [PlaybackDecision]); null mime lets Media3 sniff.
+     * [forceConversion] skips direct play (the player could not show the
+     * file's picture).
      */
     fun streamUri(
         item: ItemDto,
         quality: dev.owndemand.app.domain.VideoQuality = dev.owndemand.app.domain.VideoQuality.Original,
         transcodeSession: String? = null,
+        forceConversion: Boolean = false,
     ): Pair<String, String?> {
-        val part = PlaybackDecision.directPlayPart(item, quality)
+        val part = if (forceConversion) null else PlaybackDecision.directPlayPart(item, quality, decoders)
         return if (part != null && part.key.isNotBlank()) {
             PlaybackDecision.directMediaUrl(server, part.key) to null
         } else {

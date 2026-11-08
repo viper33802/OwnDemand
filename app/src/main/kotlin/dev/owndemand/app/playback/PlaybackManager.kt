@@ -297,7 +297,10 @@ class PlaybackManager(
         val item = _currentItem.value ?: return
         if (player.currentMediaItem == null) return
         val repo = repository
-        if (repo.streamUri(item, before) != repo.streamUri(item, now)) onAddressChanged()
+        val force = item.ratingKey in conversionOnly
+        if (repo.streamUri(item, before, forceConversion = force) != repo.streamUri(item, now, forceConversion = force)) {
+            onAddressChanged()
+        }
     }
 
     // PMS returns 400 for the transcode endpoints unless the standard
@@ -501,10 +504,26 @@ class PlaybackManager(
 
     private var timelineJob: Job? = null
 
+    /** Videos whose direct file showed no picture here; converted from now on (this session). */
+    private val conversionOnly = mutableSetOf<String>()
+
     init {
         player.addListener(object : Player.Listener {
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 _tracks.value = tracks
+                val key = _currentItem.value?.ratingKey
+                if (key != null && dev.owndemand.app.data.plex.PlaybackDecision.needsConversionFallback(
+                        isDirect = transcodeSession == null,
+                        hasVideo = tracks.containsType(C.TRACK_TYPE_VIDEO),
+                        videoPlayable = tracks.isTypeSupported(C.TRACK_TYPE_VIDEO, /* allowExceedsCapabilities = */ true),
+                        alreadyConverted = key in conversionOnly,
+                    )
+                ) {
+                    android.util.Log.w("OwnDemand", "no decoder for the direct file's video; switching to conversion")
+                    conversionOnly += key
+                    scope.launch { onAddressChanged() }
+                    return
+                }
                 tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }.forEach { g ->
                     for (i in 0 until g.length) if (g.isTrackSelected(i)) {
                         val f = g.getTrackFormat(i)
@@ -588,7 +607,7 @@ class PlaybackManager(
         // One transcode session per start; the previous one is stopped.
         transcodeSession?.let { old -> scope.launch { repository.stopTranscode(old) } }
         val session = java.util.UUID.randomUUID().toString()
-        val (uri, mime) = repository.streamUri(item, quality, session)
+        val (uri, mime) = repository.streamUri(item, quality, session, forceConversion = item.ratingKey in conversionOnly)
         transcodeSession = if (mime != null) session else null
         android.util.Log.i("OwnDemand", "stream: ${if (mime == null) "direct" else "transcode"}, cap ${quality.label}")
         val builder = MediaItem.Builder()
