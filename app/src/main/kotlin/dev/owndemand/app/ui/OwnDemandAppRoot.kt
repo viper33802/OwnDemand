@@ -112,7 +112,7 @@ fun OwnDemandAppRoot(container: dev.owndemand.app.AppContainer) {
  * TextureView for zoom / pan.
  */
 @Composable
-private fun PipVideo(manager: dev.owndemand.app.playback.PlaybackManager) {
+internal fun PipVideo(manager: dev.owndemand.app.playback.PlaybackManager) {
     // The small window shows a playing video, so it holds the screen the
     // same way the in-app surface does (see PlayerSurface).
     val keepScreenOn by manager.keepScreenOn.collectAsStateWithLifecycle()

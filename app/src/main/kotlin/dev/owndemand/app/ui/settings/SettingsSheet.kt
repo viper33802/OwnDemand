@@ -62,6 +62,7 @@ fun SettingsSheet(
     onPictureInPictureChange: (Boolean) -> Unit,
     onBackgroundPlayChange: (Boolean) -> Unit,
     onFontScaleChange: (Float) -> Unit,
+    onThemeChange: (dev.owndemand.app.domain.ThemeMode) -> Unit,
     onSkipSegmentsChange: (Boolean) -> Unit,
     onSkipModeChange:
         (dev.owndemand.app.playback.SegmentCategory, dev.owndemand.app.playback.SkipMode) -> Unit,
@@ -167,6 +168,31 @@ fun SettingsSheet(
         }
 
         Spacer(Modifier.height(20.dp))
+
+        // Theme: follow the device, or force light or dark.
+        Row(
+            Modifier.fillMaxWidth().widthIn(max = 480.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Theme", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            var themeOpen by remember { mutableStateOf(false) }
+            Box {
+                TextButton(onClick = { themeOpen = true }) { Text(settings.themeMode.label) }
+                AppDropdownMenu(expanded = themeOpen, onDismissRequest = { themeOpen = false }) {
+                    dev.owndemand.app.domain.ThemeMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.label) },
+                            onClick = {
+                                onThemeChange(mode)
+                                themeOpen = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
 
         // Text size (user request 2026-10-16): multiplies the system font
         // scale app-wide. While dragging only the sample line below the

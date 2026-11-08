@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -39,13 +41,21 @@ private val DarkColors = darkColorScheme(
     onSurfaceVariant = Color(0xFFAAAAAA),
 )
 
+/**
+ * Whether the dark scheme is in use — the Theme setting resolved, not the
+ * device's own dark mode (use this instead of isSystemInDarkTheme).
+ */
+val LocalDarkTheme = staticCompositionLocalOf { false }
+
 @Composable
 fun OwnDemandTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content,
-    )
+    CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            content = content,
+        )
+    }
 }

@@ -38,6 +38,8 @@ data class AppSettings(
     /** Text-size multiplier over the system font scale; 1 = as-is (user
      * direction 2026-10-16: some prefer larger, keep the default untouched). */
     val fontScale: Float = 1f,
+    /** Light / dark / follow the device. */
+    val themeMode: dev.owndemand.app.domain.ThemeMode = dev.owndemand.app.domain.ThemeMode.System,
     /**
      * Videos removed from Continue watching: ratingKey -> resume offset at
      * the time. A video shows again once its progress moves on.
@@ -100,6 +102,7 @@ class SettingsRepository(
         val BACKGROUND_PLAY = androidx.datastore.preferences.core.booleanPreferencesKey("background_play")
         val ACCOUNT_USERNAME = stringPreferencesKey("account_username")
         val FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("font_scale")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
         /** "ratingKey:offsetMs" entries — see [AppSettings.hiddenContinue]. */
         val HIDDEN_CONTINUE = androidx.datastore.preferences.core.stringSetPreferencesKey("hidden_continue_watching")
         val SKIP_SEGMENTS = androidx.datastore.preferences.core.booleanPreferencesKey("skip_segments")
@@ -130,6 +133,8 @@ class SettingsRepository(
                 backgroundPlay = prefs[Keys.BACKGROUND_PLAY] ?: true,
                 accountUsername = prefs[Keys.ACCOUNT_USERNAME],
                 fontScale = prefs[Keys.FONT_SCALE] ?: 1f,
+                themeMode = dev.owndemand.app.domain.ThemeMode.fromName(prefs[Keys.THEME_MODE])
+                    ?: dev.owndemand.app.domain.ThemeMode.System,
                 hiddenContinue = prefs[Keys.HIDDEN_CONTINUE].orEmpty().mapNotNull { entry ->
                     val key = entry.substringBefore(':')
                     entry.substringAfter(':', "").toLongOrNull()?.let { key to it }
@@ -266,6 +271,11 @@ class SettingsRepository(
     suspend fun setFontScale(scale: Float) = store.edit { prefs ->
         val clamped = scale.coerceIn(0.85f, 1.5f)
         if (clamped == 1f) prefs.remove(Keys.FONT_SCALE) else prefs[Keys.FONT_SCALE] = clamped
+    }
+
+    suspend fun setThemeMode(mode: dev.owndemand.app.domain.ThemeMode) = store.edit { prefs ->
+        if (mode == dev.owndemand.app.domain.ThemeMode.System) prefs.remove(Keys.THEME_MODE)
+        else prefs[Keys.THEME_MODE] = mode.name
     }
 
     /** Drops the server selection but keeps the account token, so the

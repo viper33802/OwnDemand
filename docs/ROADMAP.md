@@ -167,16 +167,20 @@ Left as is: on a phone's small inline player with the controls up, the
 Undo chip's top edge touches the "previous" button's circle (both stay
 readable and tappable).
 
-## Chunk 6 — Android TV · review first, then large
+## Chunk 6 — Android TV · in progress
 
-1. **Spike:** install the current app on an Android TV device and record what breaks
-   (launch, D-pad navigation, playback).
-2. **Decide the approach** — likely the same app with a separate TV
-   interface (Compose for TV) sharing sign-in, library and player.
-3. **Build:** TV home rows, channel browser, full-screen player with remote
-   controls, PIN sign-in (already approved on a phone/computer).
-
-Requires updating the AGENTS.md scope (Android TV is currently out of scope).
+1. **Spike** (done 2026-10-23): the phone/tablet screens launch and play,
+   but a remote cannot reach the player controls, menus or search
+   results, focus is barely visible, nothing plays full screen, and the
+   sign-in needed a browser. Two fixes came out of it for every device:
+   sign-in falls back to a plex.tv/link code when no browser can open the
+   link, and AV1 plays via the server's conversion on devices without an
+   AV1 decoder.
+2. **Approach** (decided 2026-10-23): same app, separate remote-first TV
+   interface with Compose for TV, sharing sign-in, library index, player
+   and settings. Design: `docs/TV-PLAN.md`. AGENTS.md scope updated.
+3. **Build:** theme setting (System / Light / Dark); TV rail, Home rows,
+   Channels two-pane, Library, Search, Settings, full-screen player.
 
 ## Chunk 7 — On-device recommendations · review first, medium
 
