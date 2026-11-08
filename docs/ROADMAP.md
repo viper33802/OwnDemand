@@ -181,6 +181,11 @@ readable and tappable).
    and settings. Design: `docs/TV-PLAN.md`. AGENTS.md scope updated.
 3. **Build:** theme setting (System / Light / Dark); TV rail, Home rows,
    Channels two-pane, Library, Search, Settings, full-screen player.
+4. **QR sign-in** (done 2026-10-23): the TV shows a QR code of Plex's
+   approval page (encoder written in the app, no library) with the short
+   plex.tv/link code as a fallback line.
+5. **Next:** Continue watching on the TV's own home screen (Android TV
+   "Watch Next" row, approved 2026-10-23).
 
 ## Chunk 7 — On-device recommendations · review first, medium
 
@@ -441,3 +446,8 @@ listing), that's a build flavour in `main`, not a branch.
   running on the TV. A sender written against the open Cast protocol was
   the other option considered.
 - **Offline downloads** (large; revisit separately if wanted).
+- **Voice search on TV:** declined (2026-10-23). Android TV speech
+  recognition usually runs on a third-party service, which would break
+  "the app talks only to Plex".
+- **Plex Home users** (switching between the people on one account, which
+  matters on a shared TV): later; how to approach it is still open.

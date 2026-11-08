@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The cassette from the media-tape icon on its own, no tile behind it
+     (icon-primary.svg, cropped to the tape): the middle of the TV
+     sign-in QR code. 604 × 454 viewport, so it keeps the tape's shape. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="80dp" android:height="60dp"
+    android:viewportWidth="604" android:viewportHeight="454">
+    <group android:translateX="-210" android:translateY="-270">
+        <path android:fillColor="#A78BFA"
+            android:pathData="M274,270h476a64,64 0 0 1 64,64v326a64,64 0 0 1 -64,64h-476a64,64 0 0 1 -64,-64v-326a64,64 0 0 1 64,-64z" />
+        <path android:fillColor="#EDE9FE" android:pathData="M250,330h524v230H250z" />
+        <path android:fillColor="#4F46E5"
+            android:pathData="M288,445a62,62 0 1 0 124,0a62,62 0 1 0 -124,0z M612,445a62,62 0 1 0 124,0a62,62 0 1 0 -124,0z" />
+        <path android:fillColor="#A78BFA" android:pathData="M468,391l112,65l-112,65z" />
+        <path android:fillColor="#EDE9FE" android:pathData="M310,600h404l54,124H256z" />
+        <path android:fillColor="#4F46E5"
+            android:pathData="M402,663a18,18 0 1 0 36,0a18,18 0 1 0 -36,0z M586,663a18,18 0 1 0 36,0a18,18 0 1 0 -36,0z" />
+    </group>
+</vector>

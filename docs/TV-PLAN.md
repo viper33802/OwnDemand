@@ -38,8 +38,9 @@ not required, so one APK serves phones, tablets and TVs.
 - **Side rail.** Search, Home, Channels, Library, Settings, with icons only;
   it expands with labels while focused. Back from any screen returns to
   Home; Back on Home leaves the app.
-- **Sign-in.** Short code + `plex.tv/link` (no browser on most TVs), then
-  server and library pickers as focusable lists.
+- **Sign-in.** No browser on most TVs: a QR code of Plex's approval page
+  for this TV (scan, approve), with a short code for `plex.tv/link` as the
+  fallback; then server and library pickers as focusable lists.
 - **Home.** A large header shows the focused video (artwork, title,
   channel, date, length, description start). Below it, rows: Continue
   watching, New, For you (the smart mix), one row per recently active

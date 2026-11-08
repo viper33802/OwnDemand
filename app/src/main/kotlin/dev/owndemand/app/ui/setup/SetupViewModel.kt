@@ -19,8 +19,12 @@ sealed interface SetupUiState {
     data object Idle : SetupUiState
     /** PIN created; the user must open [authUrl] and approve. */
     data class AwaitingBrowser(val code: String, val authUrl: String) : SetupUiState
-    /** No browser on this device: the user enters [code] at plex.tv/link elsewhere. */
-    data class AwaitingLinkCode(val code: String) : SetupUiState
+    /**
+     * No browser on this device: the user enters [code] at plex.tv/link on
+     * a phone or computer, or scans [qrUrl] (Plex's approval page for this
+     * device; null when that second code could not be had).
+     */
+    data class AwaitingLinkCode(val code: String, val qrUrl: String? = null) : SetupUiState
     /** A network step is running (polling PIN, discovering, verifying). */
     data class Working(val label: String) : SetupUiState
     data class PickServer(val servers: List<PlexServer>) : SetupUiState
@@ -42,7 +46,10 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
 
     /**
      * [canOpenBrowser] false (e.g. Android TV) switches to a short code the
-     * user types at plex.tv/link on another device.
+     * user types at plex.tv/link on another device, plus a QR code of the
+     * approval link. The two need two codes from Plex: plex.tv/link takes
+     * the short kind, the approval link the long ("strong") one. Whichever
+     * is approved first signs in.
      */
     fun startSignIn(canOpenBrowser: Boolean) {
         pollJob?.cancel()
@@ -53,6 +60,7 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
                 val clientId = container.settingsRepository.ensureClientIdentifier()
                 container.lazyClientId = clientId
                 val pin = container.plexTvClient.createPin(strong = canOpenBrowser)
+                val pinIds = mutableListOf(pin.id)
                 _state.value = if (canOpenBrowser) {
                     SetupUiState.AwaitingBrowser(
                         code = pin.code,
@@ -62,20 +70,31 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
                         ),
                     )
                 } else {
-                    SetupUiState.AwaitingLinkCode(pin.code)
+                    // The QR code is a bonus: without it the typed code still works.
+                    val linkPin = runCatching { container.plexTvClient.createPin(strong = true) }
+                        .onFailure { Log.w(TAG, "no second code for the QR link", it) }
+                        .getOrNull()
+                    linkPin?.let { pinIds += it.id }
+                    SetupUiState.AwaitingLinkCode(
+                        code = pin.code,
+                        qrUrl = linkPin?.let { PlexTvClient.buildAuthUrl(clientIdentifier = clientId, code = it.code) },
+                    )
                 }
-                pollUntilClaimed(pin.id)
+                pollUntilClaimed(pinIds)
             } catch (e: Exception) {
                 _state.value = SetupUiState.Error(userMessage(e, "Could not reach plex.tv."))
             }
         }
     }
 
-    private suspend fun pollUntilClaimed(pinId: Long) {
+    /** Asks about each of [pinIds] in turn until one is approved. */
+    private suspend fun pollUntilClaimed(pinIds: List<Long>) {
         val deadline = System.currentTimeMillis() + POLL_TIMEOUT_MS
         var consecutiveFailures = 0
+        var turn = 0
         while (System.currentTimeMillis() < deadline) {
             delay(POLL_INTERVAL_MS)
+            val pinId = pinIds[turn++ % pinIds.size]
             val pin = try {
                 container.plexTvClient.pollPin(pinId).also { consecutiveFailures = 0 }
             } catch (e: Exception) {
