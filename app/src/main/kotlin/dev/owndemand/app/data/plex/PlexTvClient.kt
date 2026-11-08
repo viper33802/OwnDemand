@@ -61,9 +61,14 @@ class PlexTvClient(
         fetch("$PLEX_TV/api/v2/user".toHttpUrl(), token)
             .let { PlexJson.decodeFromString<AccountResponse>(it) }
 
-    /** Lists the account's devices; filter to owned servers via ServerDiscovery. */
+    /**
+     * Lists the account's devices, including servers shared with it; turn
+     * them into servers via ServerDiscovery. Relay addresses are asked for
+     * too: a shared server is often reachable only through Plex's relay,
+     * which the app tries last.
+     */
     suspend fun resourcesJson(token: String): String =
-        fetch("$CLIENTS_PLEX_TV/api/v2/resources?includeHttps=1".toHttpUrl(), token)
+        fetch("$CLIENTS_PLEX_TV/api/v2/resources?includeHttps=1&includeRelay=1".toHttpUrl(), token)
 
     private suspend fun fetch(
         url: HttpUrl,

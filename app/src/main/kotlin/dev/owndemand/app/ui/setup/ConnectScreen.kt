@@ -148,7 +148,7 @@ fun ConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                 }
 
                 is SetupUiState.PickServer -> {
-                    Text("Choose your server", style = MaterialTheme.typography.titleMedium)
+                    Text("Choose a server", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(12.dp))
                     s.servers.forEach { server ->
                         ServerCard(server = server, onSelect = { vm.selectServer(server) })
@@ -183,6 +183,13 @@ private fun ServerCard(server: PlexServer, onSelect: () -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(server.name, style = MaterialTheme.typography.titleMedium)
+                server.sharedLabel?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     server.baseUrl,
                     style = MaterialTheme.typography.bodySmall,

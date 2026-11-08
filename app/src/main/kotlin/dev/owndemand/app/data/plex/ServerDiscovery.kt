@@ -45,9 +45,15 @@ object ServerDiscovery {
             "${connection.protocol}://${connection.address}:${connection.port}"
         }
 
+    /**
+     * Every server the account can use: its own, then those shared with it
+     * (a shared user's server token only sees the libraries the owner
+     * shared, and keeps its own watch state). Each group sorted by name.
+     */
     fun serversFromResources(devices: List<ResourceDevice>): List<PlexServer> =
         devices
-            .filter { it.owned && it.provides.split(',').contains("server") }
+            .filter { it.provides.split(',').contains("server") }
+            .sortedWith(compareBy<ResourceDevice>({ !it.owned }, { it.name.lowercase() }))
             .mapNotNull { device ->
                 val urls = orderedBaseUrls(device.connections)
                 if (urls.isEmpty()) return@mapNotNull null
@@ -57,6 +63,7 @@ object ServerDiscovery {
                     baseUrl = urls.first(),
                     accessToken = device.accessToken ?: "",
                     connections = urls,
+                    sharedBy = if (device.owned) null else device.sourceTitle?.takeIf { it.isNotBlank() } ?: "",
                 )
             }
 

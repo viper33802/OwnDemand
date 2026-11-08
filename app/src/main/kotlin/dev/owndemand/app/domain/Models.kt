@@ -13,7 +13,16 @@ data class PlexServer(
      * one currently in use; see ConnectionManager.
      */
     val connections: List<String> = emptyList(),
+    /**
+     * Who shared this server with the account; null for the account's own
+     * servers. Shown in the server picker only, not stored.
+     */
+    val sharedBy: String? = null,
 ) {
+    /** "Shared by ‹owner›" for a shared server, null for the account's own. */
+    val sharedLabel: String?
+        get() = sharedBy?.let { if (it.isBlank()) "Shared with you" else "Shared by $it" }
+
     /** Addresses to try, best first (older installs stored only [baseUrl]). */
     val candidates: List<String> get() = connections.ifEmpty { listOf(baseUrl) }
 }

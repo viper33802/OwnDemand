@@ -100,7 +100,7 @@ fun TvConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                     }
                     is SetupUiState.Working -> Waiting(s.label)
                     is SetupUiState.PickServer -> {
-                        Text("Choose your server", style = MaterialTheme.typography.headlineSmall)
+                        Text("Choose a server", style = MaterialTheme.typography.headlineSmall)
                         Spacer(Modifier.height(16.dp))
                         val first = remember { FocusRequester() }
                         FocusOnStart(first)
@@ -108,7 +108,10 @@ fun TvConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                             itemsIndexed(s.servers) { i, server ->
                                 TvListRow(
                                     title = server.name,
-                                    detail = "${server.candidates.size} address${if (server.candidates.size == 1) "" else "es"}",
+                                    detail = listOfNotNull(
+                                        server.sharedLabel,
+                                        "${server.candidates.size} address${if (server.candidates.size == 1) "" else "es"}",
+                                    ).joinToString(" · "),
                                     onClick = { vm.selectServer(server) },
                                     modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
                                 )

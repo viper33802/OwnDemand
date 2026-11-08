@@ -187,6 +187,17 @@ readable and tappable).
 5. **Next:** Continue watching on the TV's own home screen (Android TV
    "Watch Next" row, approved 2026-10-23).
 
+## Shared servers · small, done 2026-11-06
+
+Servers other people share with the account are offered alongside the
+account's own: the picker lists owned servers first, then shared ones
+marked "Shared by ‹owner›" (Plex's `sourceTitle`). A shared user's server
+token sees only the libraries the owner shared and keeps its own watch
+state; every server call the app makes is allowed with it. Discovery now
+also asks plex.tv for relay addresses (`includeRelay=1`), since a shared
+server is often reachable only that way; relay stays the last resort.
+Not checked against a real shared server yet.
+
 ## Chunk 7 — On-device recommendations · review first, medium
 
 Computed on the device from the library's own watch history (view counts,

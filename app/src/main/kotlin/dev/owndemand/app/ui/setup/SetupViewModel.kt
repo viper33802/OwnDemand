@@ -135,7 +135,7 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
                 )
                 when {
                     servers.isEmpty() -> _state.value = SetupUiState.Error(
-                        "No owned Plex Media Server found on this account.",
+                        "No Plex servers found on this account, owned or shared.",
                     )
                     else -> _state.value = SetupUiState.PickServer(servers)
                 }
