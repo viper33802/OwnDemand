@@ -102,9 +102,12 @@ class AppContainer(context: Context) {
     /** Whole-library in-memory index powering search/sort/home mix (M5). */
     val libraryIndex: dev.owndemand.app.data.LibraryIndex = dev.owndemand.app.data.LibraryIndex()
 
+    /** What this device can decode, for direct play vs conversion. */
+    private val decoderSupport = dev.owndemand.app.playback.MediaCodecDecoderSupport()
+
     fun repository(): PlexRepository {
         val server = currentServer ?: error("repository used before a server was selected")
-        return PlexRepository(pmsClient(server), server)
+        return PlexRepository(pmsClient(server), server, decoderSupport)
     }
 
     fun playbackManager(): PlaybackManager {

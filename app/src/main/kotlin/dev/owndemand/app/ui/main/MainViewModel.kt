@@ -219,6 +219,10 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.settingsRepository.setFontScale(scale) }
     }
 
+    fun setThemeMode(mode: dev.owndemand.app.domain.ThemeMode) {
+        viewModelScope.launch { container.settingsRepository.setThemeMode(mode) }
+    }
+
     /** Drops the server choice (keeps the account token); the connect flow
      * re-runs discovery and lists every server on the account. */
     fun switchServer() {

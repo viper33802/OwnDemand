@@ -23,7 +23,8 @@ data class AccountResponse(
 /**
  * GET https://clients.plex.tv/api/v2/resources — the account's devices.
  * Servers are entries whose `provides` contains "server"; their
- * machineIdentifier is carried in `clientIdentifier`.
+ * machineIdentifier is carried in `clientIdentifier`. Servers other people
+ * share with the account come back too, with `owned` false.
  */
 @Serializable
 data class ResourceDevice(
@@ -31,6 +32,8 @@ data class ResourceDevice(
     val product: String = "",
     val provides: String = "",
     val owned: Boolean = false,
+    /** For a server shared with this account: the owner's Plex username. */
+    val sourceTitle: String? = null,
     val accessToken: String? = null,
     val clientIdentifier: String = "",
     val connections: List<ResourceConnection> = emptyList(),

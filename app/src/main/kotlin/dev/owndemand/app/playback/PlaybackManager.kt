@@ -297,7 +297,10 @@ class PlaybackManager(
         val item = _currentItem.value ?: return
         if (player.currentMediaItem == null) return
         val repo = repository
-        if (repo.streamUri(item, before) != repo.streamUri(item, now)) onAddressChanged()
+        val force = item.ratingKey in conversionOnly
+        if (repo.streamUri(item, before, forceConversion = force) != repo.streamUri(item, now, forceConversion = force)) {
+            onAddressChanged()
+        }
     }
 
     // PMS returns 400 for the transcode endpoints unless the standard
@@ -330,6 +333,11 @@ class PlaybackManager(
                 addListener(object : Player.Listener {
                     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                         _wantsToPlay.value = playWhenReady && _currentItem.value != null
+                        updateKeepScreenOn()
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        updateKeepScreenOn()
                     }
 
                     override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -378,6 +386,20 @@ class PlaybackManager(
     /** A video is loaded and set to play (also while buffering): PiP-worthy. */
     private val _wantsToPlay = MutableStateFlow(false)
     val wantsToPlay: StateFlow<Boolean> = _wantsToPlay.asStateFlow()
+
+    /**
+     * The video surfaces hold the screen on while this is true: set to play
+     * and ready or buffering. Unlike [isPlaying] it stays on through a
+     * rebuffer, which would otherwise let an idle device dim mid-video; it
+     * goes off on pause, at the end, on an error and on stop.
+     */
+    private val _keepScreenOn = MutableStateFlow(false)
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
+    private fun updateKeepScreenOn() {
+        _keepScreenOn.value = _currentItem.value != null && player.playWhenReady &&
+            (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+    }
 
     /** Width / height of the playing video (picture-in-picture window shape). */
     private val _videoAspect = MutableStateFlow(16f / 9f)
@@ -482,10 +504,26 @@ class PlaybackManager(
 
     private var timelineJob: Job? = null
 
+    /** Videos whose direct file showed no picture here; converted from now on (this session). */
+    private val conversionOnly = mutableSetOf<String>()
+
     init {
         player.addListener(object : Player.Listener {
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 _tracks.value = tracks
+                val key = _currentItem.value?.ratingKey
+                if (key != null && dev.owndemand.app.data.plex.PlaybackDecision.needsConversionFallback(
+                        isDirect = transcodeSession == null,
+                        hasVideo = tracks.containsType(C.TRACK_TYPE_VIDEO),
+                        videoPlayable = tracks.isTypeSupported(C.TRACK_TYPE_VIDEO, /* allowExceedsCapabilities = */ true),
+                        alreadyConverted = key in conversionOnly,
+                    )
+                ) {
+                    android.util.Log.w("OwnDemand", "no decoder for the direct file's video; switching to conversion")
+                    conversionOnly += key
+                    scope.launch { onAddressChanged() }
+                    return
+                }
                 tracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }.forEach { g ->
                     for (i in 0 until g.length) if (g.isTrackSelected(i)) {
                         val f = g.getTrackFormat(i)
@@ -569,7 +607,7 @@ class PlaybackManager(
         // One transcode session per start; the previous one is stopped.
         transcodeSession?.let { old -> scope.launch { repository.stopTranscode(old) } }
         val session = java.util.UUID.randomUUID().toString()
-        val (uri, mime) = repository.streamUri(item, quality, session)
+        val (uri, mime) = repository.streamUri(item, quality, session, forceConversion = item.ratingKey in conversionOnly)
         transcodeSession = if (mime != null) session else null
         android.util.Log.i("OwnDemand", "stream: ${if (mime == null) "direct" else "transcode"}, cap ${quality.label}")
         val builder = MediaItem.Builder()
@@ -687,8 +725,9 @@ class PlaybackManager(
     fun seekBy(deltaMs: Long) = seekTo(player.currentPosition + deltaMs)
 
     fun setSpeed(factor: Float) {
-        _speed.value = factor
-        player.setPlaybackSpeed(factor)
+        val snapped = PlaybackSpeed.snap(factor)
+        _speed.value = snapped
+        player.setPlaybackSpeed(snapped)
     }
 
     fun toggleCaptions() {
@@ -831,6 +870,7 @@ class PlaybackManager(
         _currentItem.value = null
         _isPlaying.value = false
         _wantsToPlay.value = false
+        _keepScreenOn.value = false
         _reconnecting.value = false
         previewPartId = null
         _bifIndex.value = null

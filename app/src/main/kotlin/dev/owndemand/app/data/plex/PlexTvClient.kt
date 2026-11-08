@@ -42,9 +42,13 @@ class PlexTvClient(
             java.net.URLEncoder.encode(value, "UTF-8")
     }
 
-    /** Requests a new sign-in PIN. `strong` gives a longer-lived code. */
-    suspend fun createPin(): PinResponse =
-        fetch("$PLEX_TV/api/v2/pins?strong=true".toHttpUrl(), token = null, method = "POST")
+    /**
+     * Requests a new sign-in PIN. [strong] gives a longer code that only the
+     * Auth App link can claim; without it the 4-character code can be typed
+     * at plex.tv/link (for devices with no browser).
+     */
+    suspend fun createPin(strong: Boolean = true): PinResponse =
+        fetch("$PLEX_TV/api/v2/pins?strong=$strong".toHttpUrl(), token = null, method = "POST")
             .let { PlexJson.decodeFromString<PinResponse>(it) }
 
     /** Polls a PIN; [PinResponse.authToken] is non-null once the user has signed in. */
@@ -57,9 +61,14 @@ class PlexTvClient(
         fetch("$PLEX_TV/api/v2/user".toHttpUrl(), token)
             .let { PlexJson.decodeFromString<AccountResponse>(it) }
 
-    /** Lists the account's devices; filter to owned servers via ServerDiscovery. */
+    /**
+     * Lists the account's devices, including servers shared with it; turn
+     * them into servers via ServerDiscovery. Relay addresses are asked for
+     * too: a shared server is often reachable only through Plex's relay,
+     * which the app tries last.
+     */
     suspend fun resourcesJson(token: String): String =
-        fetch("$CLIENTS_PLEX_TV/api/v2/resources?includeHttps=1".toHttpUrl(), token)
+        fetch("$CLIENTS_PLEX_TV/api/v2/resources?includeHttps=1&includeRelay=1".toHttpUrl(), token)
 
     private suspend fun fetch(
         url: HttpUrl,

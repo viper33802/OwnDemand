@@ -90,8 +90,10 @@ No accounts, no backend, no analytics.
   choice in the player. Direct play when the device can decode the file,
   Plex's own transcoder when it can't.
 - **At home and away** — the app keeps every HTTPS address Plex offers
-  for your server and uses whichever answers, so it keeps working when
-  you leave the house.
+  for your server and uses whichever answers (Plex's relay last), so it
+  keeps working when you leave the house.
+- **Shared servers** — a library someone else shares with your Plex
+  account works too: you see what they shared, with your own watch state.
 - **Adaptive layouts** for phones, tablet portrait and tablet landscape
   (side navigation, multi-column grids, two-pane watch screen); light and
   dark themes; an app-wide **Text size** setting.
@@ -119,7 +121,8 @@ source of truth; OwnDemand never downloads, moves or edits media.
    *Install unknown apps* for your browser or file manager — allow it, then
    tap **Install**.
 3. Open OwnDemand, sign in with Plex (it opens plex.tv in your browser to
-   approve a short code), pick your server, then pick the video library.
+   approve a short code), pick your server (your own, or one shared with
+   you), then pick the video library.
 
 Updates install over the previous version as long as they come from these
 releases (they are all signed with the same key). Each release lists the
@@ -149,7 +152,7 @@ configure your own signing key — see [`docs/RELEASING.md`](docs/RELEASING.md).
   AES-GCM key, excluded from cloud backup and device transfer, and never
   logged or displayed.
 - **No third parties by default.** The app talks to plex.tv (sign-in and
-  server discovery) and to your server — nothing else.
+  server discovery) and to the Plex server you picked — nothing else.
 - **One opt-in exception: Skip segments.** Off by default; switching it on
   asks for confirmation first. While it is on, the app sends one HTTPS
   request to SponsorBlock (`sponsor.ajay.app`) as each video starts,

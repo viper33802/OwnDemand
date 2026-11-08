@@ -167,16 +167,36 @@ Left as is: on a phone's small inline player with the controls up, the
 Undo chip's top edge touches the "previous" button's circle (both stay
 readable and tappable).
 
-## Chunk 6 — Android TV · review first, then large
+## Chunk 6 — Android TV · in progress
 
-1. **Spike:** install the current app on an Android TV device and record what breaks
-   (launch, D-pad navigation, playback).
-2. **Decide the approach** — likely the same app with a separate TV
-   interface (Compose for TV) sharing sign-in, library and player.
-3. **Build:** TV home rows, channel browser, full-screen player with remote
-   controls, PIN sign-in (already approved on a phone/computer).
+1. **Spike** (done 2026-10-23): the phone/tablet screens launch and play,
+   but a remote cannot reach the player controls, menus or search
+   results, focus is barely visible, nothing plays full screen, and the
+   sign-in needed a browser. Two fixes came out of it for every device:
+   sign-in falls back to a plex.tv/link code when no browser can open the
+   link, and AV1 plays via the server's conversion on devices without an
+   AV1 decoder.
+2. **Approach** (decided 2026-10-23): same app, separate remote-first TV
+   interface with Compose for TV, sharing sign-in, library index, player
+   and settings. Design: `docs/TV-PLAN.md`. AGENTS.md scope updated.
+3. **Build:** theme setting (System / Light / Dark); TV rail, Home rows,
+   Channels two-pane, Library, Search, Settings, full-screen player.
+4. **QR sign-in** (done 2026-10-23): the TV shows a QR code of Plex's
+   approval page (encoder written in the app, no library) with the short
+   plex.tv/link code as a fallback line.
+5. **Next:** Continue watching on the TV's own home screen (Android TV
+   "Watch Next" row, approved 2026-10-23).
 
-Requires updating the AGENTS.md scope (Android TV is currently out of scope).
+## Shared servers · small, done 2026-11-06
+
+Servers other people share with the account are offered alongside the
+account's own: the picker lists owned servers first, then shared ones
+marked "Shared by ‹owner›" (Plex's `sourceTitle`). A shared user's server
+token sees only the libraries the owner shared and keeps its own watch
+state; every server call the app makes is allowed with it. Discovery now
+also asks plex.tv for relay addresses (`includeRelay=1`), since a shared
+server is often reachable only that way; relay stays the last resort.
+Not checked against a real shared server yet.
 
 ## Chunk 7 — On-device recommendations · review first, medium
 
@@ -437,3 +457,8 @@ listing), that's a build flavour in `main`, not a branch.
   running on the TV. A sender written against the open Cast protocol was
   the other option considered.
 - **Offline downloads** (large; revisit separately if wanted).
+- **Voice search on TV:** declined (2026-10-23). Android TV speech
+  recognition usually runs on a third-party service, which would break
+  "the app talks only to Plex".
+- **Plex Home users** (switching between the people on one account, which
+  matters on a shared TV): later; how to approach it is still open.

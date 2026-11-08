@@ -39,6 +39,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import dev.owndemand.app.playback.PlaybackSpeed
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -103,6 +111,7 @@ fun VideoPlayer(
     val isBuffering by manager.isBuffering.collectAsStateWithLifecycle()
     val reconnecting by manager.reconnecting.collectAsStateWithLifecycle()
     val skipSegments by manager.skipSegments.collectAsStateWithLifecycle()
+    val keepScreenOn by manager.keepScreenOn.collectAsStateWithLifecycle()
 
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -192,6 +201,7 @@ fun VideoPlayer(
     Box(modifier = modifier.background(Color.Black)) {
         PlayerSurface(
             player = player,
+            keepScreenOn = keepScreenOn,
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer {
@@ -522,9 +532,17 @@ private fun BoxScope.SkipUndoChip(manager: PlaybackManager, controlsVisible: Boo
 /**
  * Video surface via Media3 PlayerView. TextureView (not SurfaceView) so
  * Compose graphicsLayer zoom/pan transforms apply to the frames (spec §3).
+ *
+ * Keep-screen-on lives here (owner report 2026-10-21): Media3's PlayerView
+ * no longer holds the screen itself (the old ExoPlayer view did; the docs
+ * now leave it to the app, developer.android.com/media/media3/ui/playerview).
+ * View.keepScreenOn holds the window flag only while this surface is on
+ * screen and only while a video is set to play (PlaybackManager.keepScreenOn,
+ * which also covers rebuffering) — paused, ended or hidden, the device
+ * sleeps on its own timeout, and the power button still works.
  */
 @Composable
-private fun PlayerSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
+private fun PlayerSurface(player: ExoPlayer, keepScreenOn: Boolean, modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
@@ -532,7 +550,10 @@ private fun PlayerSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
                 .inflate(R.layout.player_surface, null, false) as PlayerView)
                 .apply { useController = false }
         },
-        update = { it.player = player },
+        update = {
+            it.player = player
+            it.keepScreenOn = keepScreenOn
+        },
     )
 }
 
@@ -785,13 +806,15 @@ private fun IconControl(@DrawableRes icon: Int, description: String, onClick: ()
     }
 }
 
-/** Playback-rate options (reference-app list). */
-val SPEED_OPTIONS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+fun speedLabel(factor: Float): String = "${PlaybackSpeed.number(factor)}x"
 
-fun speedLabel(factor: Float): String =
-    if (factor == factor.toLong().toFloat()) "${factor.toLong()}x" else "${factor}x"
+private val SpeedAccent = Color(0xFFA78BFA)
 
-/** Top-row speed button + rate menu (M6). */
+/**
+ * Top-row speed button + speed panel: a slider in 5 % steps (0.5x–2x),
+ * − / + for one step at a time, and one-tap presets. Changes apply live,
+ * so the user hears the speed while setting it.
+ */
 @Composable
 private fun SpeedControl(manager: PlaybackManager, onMenuOpenChange: (Boolean) -> Unit) {
     val speed by manager.speed.collectAsStateWithLifecycle()
@@ -800,21 +823,78 @@ private fun SpeedControl(manager: PlaybackManager, onMenuOpenChange: (Boolean) -
     Box {
         PlayerTextButton(speedLabel(speed), "Playback speed") { menuOpen = true }
         AppDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            SPEED_OPTIONS.forEach { option ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            speedLabel(option),
-                            color = if (option == speed) Color(0xFFA78BFA) else Color.White,
-                        )
-                    },
-                    onClick = {
-                        manager.setSpeed(option)
-                        menuOpen = false
-                    },
+            Column(Modifier.width(280.dp).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SpeedStepButton("−", "Slower", enabled = speed > PlaybackSpeed.MIN) {
+                        manager.setSpeed(PlaybackSpeed.step(speed, -1))
+                    }
+                    Text(
+                        if (PlaybackSpeed.same(speed, 1f)) "Normal" else speedLabel(speed),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                    SpeedStepButton("+", "Faster", enabled = speed < PlaybackSpeed.MAX) {
+                        manager.setSpeed(PlaybackSpeed.step(speed, 1))
+                    }
+                }
+                Slider(
+                    value = speed,
+                    onValueChange = { manager.setSpeed(it) },
+                    valueRange = PlaybackSpeed.MIN..PlaybackSpeed.MAX,
+                    steps = PlaybackSpeed.SLIDER_STEPS,
+                    colors = SliderDefaults.colors(
+                        thumbColor = SpeedAccent,
+                        activeTrackColor = SpeedAccent,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.25f),
+                        // 29 stops: tick marks would only add noise.
+                        activeTickColor = Color.Transparent,
+                        inactiveTickColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.semantics { contentDescription = "Playback speed" },
                 )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    PlaybackSpeed.PRESETS.forEach { preset ->
+                        val selected = PlaybackSpeed.same(speed, preset)
+                        Box(
+                            Modifier
+                                .heightIn(min = 40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (selected) SpeedAccent.copy(alpha = 0.25f) else Color.Transparent)
+                                .clickable(role = Role.Button) { manager.setSpeed(preset) }
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                speedLabel(preset),
+                                color = if (selected) SpeedAccent else Color.White,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+/** − / + in the speed panel: a 44 dp round target. */
+@Composable
+private fun SpeedStepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = if (enabled) 0.12f else 0.05f))
+            .clickable(enabled = enabled, onClickLabel = description, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(symbol, color = Color.White.copy(alpha = if (enabled) 1f else 0.35f), fontSize = 22.sp)
     }
 }
 

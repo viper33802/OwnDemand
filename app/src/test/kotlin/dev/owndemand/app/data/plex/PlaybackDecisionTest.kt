@@ -18,6 +18,8 @@ import org.junit.Test
  */
 class PlaybackDecisionTest {
 
+    private val anyDecoder = DecoderSupport { _, _, _ -> true }
+
     private fun item(container: String, video: String, audio: String) =
         ItemDto(
             ratingKey = "12345",
@@ -40,27 +42,27 @@ class PlaybackDecisionTest {
 
     @Test
     fun `av1 mp4 aac direct plays`() {
-        assertNotNull(PlaybackDecision.directPlayPart(item("mp4", "av1", "aac")))
+        assertNotNull(PlaybackDecision.directPlayPart(item("mp4", "av1", "aac"), anyDecoder))
     }
 
     @Test
     fun `h264 mkv aac direct plays`() {
-        assertNotNull(PlaybackDecision.directPlayPart(item("mkv", "h264", "aac")))
+        assertNotNull(PlaybackDecision.directPlayPart(item("mkv", "h264", "aac"), anyDecoder))
     }
 
     @Test
     fun `hevc falls back to transcode`() {
-        assertNull(PlaybackDecision.directPlayPart(item("mp4", "hevc", "aac")))
+        assertNull(PlaybackDecision.directPlayPart(item("mp4", "hevc", "aac"), anyDecoder))
     }
 
     @Test
     fun `unsupported audio falls back to transcode`() {
-        assertNull(PlaybackDecision.directPlayPart(item("mp4", "av1", "dts")))
+        assertNull(PlaybackDecision.directPlayPart(item("mp4", "av1", "dts"), anyDecoder))
     }
 
     @Test
     fun `item without media falls back to transcode`() {
-        assertNull(PlaybackDecision.directPlayPart(ItemDto(ratingKey = "1")))
+        assertNull(PlaybackDecision.directPlayPart(ItemDto(ratingKey = "1"), anyDecoder))
     }
 
     @Test
@@ -80,7 +82,7 @@ class PlaybackDecisionTest {
         """.trimIndent()
         val parsed = PlexJson.decodeFromString<MediaContainerResponse>(json)
         val item = parsed.container.Metadata.single()
-        val part = PlaybackDecision.directPlayPart(item)
+        val part = PlaybackDecision.directPlayPart(item, anyDecoder)
         assertNotNull(part)
         assertEquals("/library/parts/67890/1700000000/file.mp4", part?.key)
         assertEquals(1, part?.subtitleStreams?.size)

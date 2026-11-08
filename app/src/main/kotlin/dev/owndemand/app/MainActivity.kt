@@ -10,7 +10,14 @@ import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import dev.owndemand.app.domain.ThemeMode
+import dev.owndemand.app.ui.tv.TvAppRoot
+import dev.owndemand.app.ui.tv.isTelevision
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import dev.owndemand.app.ui.OwnDemandAppRoot
@@ -24,15 +31,25 @@ class MainActivity : ComponentActivity() {
     /** A video plays and the Picture-in-picture setting is on. */
     private var pipAllowed = false
 
+    /** The resolved theme's last value (see [applyWindowTheme]). */
+    private var windowDark = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = container
         holdSplashUntilReady(container)
+        val isTv = isTelevision()
         setContent {
-            OwnDemandTheme {
+            // Theme setting (System / Light / Dark); a TV without a dark
+            // mode of its own counts as dark under System.
+            val mode = container.settingsRepository.settings
+                .collectAsState(initial = null).value?.themeMode ?: ThemeMode.System
+            val dark = mode.isDark(isSystemInDarkTheme(), isTv)
+            LaunchedEffect(dark) { applyWindowTheme(dark) }
+            OwnDemandTheme(darkTheme = dark) {
                 CompositionLocalProvider(LocalAppContainer provides container) {
-                    OwnDemandAppRoot(container)
+                    if (isTv) TvAppRoot(container) else OwnDemandAppRoot(container)
                 }
             }
         }
@@ -68,6 +85,7 @@ class MainActivity : ComponentActivity() {
                     // Below Android 12 the window background is the splash
                     // itself; from here on it is just the app background.
                     window.setBackgroundDrawableResource(R.color.app_background)
+                    applyWindowTheme(windowDark)
                     return true
                 }
             },
@@ -75,6 +93,22 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             kotlinx.coroutines.delay(SPLASH_MAX_MS)
             container.markLaunchReady()
+        }
+    }
+
+    /**
+     * System bars and the window background follow the resolved theme, so a
+     * forced Dark (or Light) never shows the other scheme around the edges.
+     */
+    private fun applyWindowTheme(dark: Boolean) {
+        windowDark = dark
+        val style = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+        if (container.launchReady.value) {
+            window.setBackgroundDrawable(
+                android.graphics.drawable.ColorDrawable(if (dark) DARK_BACKGROUND else LIGHT_BACKGROUND),
+            )
         }
     }
 
@@ -124,6 +158,10 @@ class MainActivity : ComponentActivity() {
         container.onAppBackground()
     }
 }
+
+/** Window backgrounds matching the Compose schemes (Theme.kt). */
+private const val DARK_BACKGROUND = 0xFF0F0F0F.toInt()
+private const val LIGHT_BACKGROUND = 0xFFFFFFFF.toInt()
 
 /** Longest the launch splash can stay up, whatever happens. */
 private const val SPLASH_MAX_MS = 4_000L

@@ -10,9 +10,10 @@ import dev.owndemand.app.domain.VideoQuality
  * Client-side playback decision (M3 spike: PMS 1.43 ignores
  * X-Plex-Client-Profile, so the app decides from the item's own streams).
  *
- * Direct play when the part is a progressive container with a codec our
- * targets decode (AV1 via dav1d, H264 everywhere) and AAC audio; otherwise
- * fall back to the server's HLS transcode.
+ * Direct play when the part is a progressive container with a video codec
+ * this device can decode ([DecoderSupport]: AV1 needs a decoder that not
+ * every device has; H264 everywhere) and AAC audio; otherwise fall back to
+ * the server's HLS transcode.
  */
 object PlaybackDecision {
 
@@ -21,7 +22,7 @@ object PlaybackDecision {
     private val DIRECT_AUDIO_CODECS = setOf("aac", "mp3", "ac3", "eac3")
 
     /** The part to direct-play, or null → use the HLS transcode. */
-    fun directPlayPart(item: ItemDto): PartDto? =
+    fun directPlayPart(item: ItemDto, decoders: DecoderSupport): PartDto? =
         item.Media.firstOrNull()?.Part?.firstOrNull() { part ->
             val media = item.Media.firstOrNull()
             val container = part.container.ifBlank { media?.container.orEmpty() }.lowercase()
@@ -31,8 +32,21 @@ object PlaybackDecision {
                 ?: media?.audioCodec).orEmpty().lowercase()
             container in DIRECT_CONTAINERS &&
                 video in DIRECT_VIDEO_CODECS &&
+                decoders.canDecode(video, part.videoStream?.width ?: 0, part.videoStream?.height ?: 0) &&
                 (audio.isEmpty() || audio in DIRECT_AUDIO_CODECS)
         }
+
+    /**
+     * The player loaded a direct file but no decoder can show its picture
+     * (the decoder list said yes, or was wrong): play it via the server's
+     * conversion instead, once per video.
+     */
+    fun needsConversionFallback(
+        isDirect: Boolean,
+        hasVideo: Boolean,
+        videoPlayable: Boolean,
+        alreadyConverted: Boolean,
+    ): Boolean = isDirect && hasVideo && !videoPlayable && !alreadyConverted
 
     fun hlsTranscodeUrl(
         server: PlexServer,
@@ -57,8 +71,8 @@ object PlaybackDecision {
      * below the cap (no needless quality loss); unknown height counts as
      * "too tall" so the cap is never exceeded.
      */
-    fun directPlayPart(item: ItemDto, quality: VideoQuality): PartDto? {
-        val part = directPlayPart(item) ?: return null
+    fun directPlayPart(item: ItemDto, quality: VideoQuality, decoders: DecoderSupport): PartDto? {
+        val part = directPlayPart(item, decoders) ?: return null
         val cap = quality.maxHeight ?: return part
         val height = part.videoStream?.height ?: 0
         return part.takeIf { height in 1..cap }

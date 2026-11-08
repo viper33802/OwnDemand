@@ -12,8 +12,8 @@ android {
         applicationId = "dev.owndemand.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.4.1"
+        versionCode = 9
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -77,6 +77,9 @@ dependencies {
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
+    // Android TV interface (Chunk 6): focus-aware cards, buttons and the
+    // expanding side rail. Apache 2.0, like the rest of AndroidX.
+    implementation("androidx.tv:tv-material:1.1.0")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 

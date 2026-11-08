@@ -1,6 +1,7 @@
 package dev.owndemand.app.ui.setup
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,12 +25,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.owndemand.app.domain.PlexServer
 import dev.owndemand.app.ui.common.BrandWordmark
@@ -45,6 +48,13 @@ import dev.owndemand.app.ui.readableWidth
 fun ConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val canOpenBrowser = remember(context) {
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse("https://app.plex.tv/auth"))
+        canOpenAuthPage(
+            context.packageManager.queryIntentActivities(view, PackageManager.MATCH_DEFAULT_ONLY)
+                .map { it.activityInfo.packageName },
+        )
+    }
 
     // Open the Auth App in the browser once per AwaitingBrowser state.
     if (state is SetupUiState.AwaitingBrowser) {
@@ -83,17 +93,17 @@ fun ConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                 SetupUiState.Idle -> {
                     if (signedIn) {
                         Button(
-                            onClick = { vm.rediscoverServers() },
+                            onClick = { vm.rediscoverServers(canOpenBrowser) },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Continue — find your servers") }
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
-                            onClick = { vm.startSignIn() },
+                            onClick = { vm.startSignIn(canOpenBrowser) },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Sign in with a different account") }
                     } else {
                         Button(
-                            onClick = { vm.startSignIn() },
+                            onClick = { vm.startSignIn(canOpenBrowser) },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("Sign in with Plex") }
                     }
@@ -112,6 +122,25 @@ fun ConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                     TextButton(onClick = { vm.backToIdle() }) { Text("Cancel") }
                 }
 
+                is SetupUiState.AwaitingLinkCode -> {
+                    Text(
+                        "On your phone or computer, go to plex.tv/link and enter",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        s.code,
+                        style = MaterialTheme.typography.displayMedium,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 8.sp,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick = { vm.backToIdle() }) { Text("Cancel") }
+                }
+
                 is SetupUiState.Working -> {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(16.dp))
@@ -119,7 +148,7 @@ fun ConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                 }
 
                 is SetupUiState.PickServer -> {
-                    Text("Choose your server", style = MaterialTheme.typography.titleMedium)
+                    Text("Choose a server", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(12.dp))
                     s.servers.forEach { server ->
                         ServerCard(server = server, onSelect = { vm.selectServer(server) })
@@ -137,7 +166,7 @@ fun ConnectScreen(vm: SetupViewModel, signedIn: Boolean) {
                     Row {
                         OutlinedButton(onClick = { vm.backToIdle() }) { Text("Back") }
                         Spacer(Modifier.width(12.dp))
-                        Button(onClick = { vm.rediscoverServers() }) { Text("Retry") }
+                        Button(onClick = { vm.rediscoverServers(canOpenBrowser) }) { Text("Retry") }
                     }
                 }
             }
@@ -154,6 +183,13 @@ private fun ServerCard(server: PlexServer, onSelect: () -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(server.name, style = MaterialTheme.typography.titleMedium)
+                server.sharedLabel?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     server.baseUrl,
                     style = MaterialTheme.typography.bodySmall,
@@ -165,3 +201,13 @@ private fun ServerCard(server: PlexServer, onSelect: () -> Unit) {
         }
     }
 }
+
+/** Android TV's stand-in "browser": it accepts web links and shows nothing. */
+private val BROWSER_STUBS = setOf(
+    "com.google.android.tv.frameworkpackagestubs",
+    "com.android.tv.frameworkpackagestubs",
+)
+
+/** True when some real app (not a TV stub) can open the plex.tv auth page. */
+internal fun canOpenAuthPage(handlerPackages: List<String>): Boolean =
+    handlerPackages.any { it !in BROWSER_STUBS }
