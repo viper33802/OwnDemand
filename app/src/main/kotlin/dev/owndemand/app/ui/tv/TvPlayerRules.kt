@@ -19,8 +19,8 @@ const val TV_SEEK_COMMIT_MS = 700L
 /** Controls hide after this long without a key while playing. */
 const val TV_CONTROLS_HIDE_MS = 5_000L
 
-/** Speeds offered in the player's speed panel. */
-val TvSpeeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+/** Speeds offered in the player's speed panel (5 % steps around normal). */
+val TvSpeeds = dev.owndemand.app.playback.PlaybackSpeed.TV_OPTIONS
 
 /**
  * Seek distance for the [repeat]th press in a row (0-based): 10 s for the
@@ -41,4 +41,5 @@ fun tvSeekTarget(positionMs: Long, deltaMs: Long, durationMs: Long): Long {
 
 /** "1.25×" style speed label; 1 is "Normal". */
 fun tvSpeedLabel(speed: Float): String =
-    if (speed == 1f) "Normal" else (if (speed % 1f == 0f) "${speed.toInt()}×" else "${speed}×")
+    if (dev.owndemand.app.playback.PlaybackSpeed.same(speed, 1f)) "Normal"
+    else "${dev.owndemand.app.playback.PlaybackSpeed.number(speed)}×"

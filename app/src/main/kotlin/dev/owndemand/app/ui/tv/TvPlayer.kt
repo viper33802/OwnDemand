@@ -748,7 +748,7 @@ private fun ChoicesPanel(panel: Panel, manager: PlaybackManager, onClose: () -> 
         Panel.Quality -> "Quality" to listOf(
             Row("Auto (${settingsQuality.label})", qualityOverride == null) { manager.setQualityOverride(null) },
         ) + VideoQuality.entries.map { q -> Row(q.label, qualityOverride == q) { manager.setQualityOverride(q) } }
-        Panel.Speed -> "Speed" to TvSpeeds.map { s -> Row(tvSpeedLabel(s), speed == s) { manager.setSpeed(s) } }
+        Panel.Speed -> "Speed" to TvSpeeds.map { s -> Row(tvSpeedLabel(s), dev.owndemand.app.playback.PlaybackSpeed.same(speed, s)) { manager.setSpeed(s) } }
         else -> "" to emptyList()
     }
     val selectedRequester = remember(panel) { FocusRequester() }

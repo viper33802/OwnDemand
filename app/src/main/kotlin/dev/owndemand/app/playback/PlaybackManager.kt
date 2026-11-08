@@ -725,8 +725,9 @@ class PlaybackManager(
     fun seekBy(deltaMs: Long) = seekTo(player.currentPosition + deltaMs)
 
     fun setSpeed(factor: Float) {
-        _speed.value = factor
-        player.setPlaybackSpeed(factor)
+        val snapped = PlaybackSpeed.snap(factor)
+        _speed.value = snapped
+        player.setPlaybackSpeed(snapped)
     }
 
     fun toggleCaptions() {
