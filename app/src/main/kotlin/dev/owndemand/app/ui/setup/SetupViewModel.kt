@@ -19,6 +19,8 @@ sealed interface SetupUiState {
     data object Idle : SetupUiState
     /** PIN created; the user must open [authUrl] and approve. */
     data class AwaitingBrowser(val code: String, val authUrl: String) : SetupUiState
+    /** No browser on this device: the user enters [code] at plex.tv/link elsewhere. */
+    data class AwaitingLinkCode(val code: String) : SetupUiState
     /** A network step is running (polling PIN, discovering, verifying). */
     data class Working(val label: String) : SetupUiState
     data class PickServer(val servers: List<PlexServer>) : SetupUiState
@@ -38,22 +40,30 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
 
     private var pollJob: Job? = null
 
-    fun startSignIn() {
+    /**
+     * [canOpenBrowser] false (e.g. Android TV) switches to a short code the
+     * user types at plex.tv/link on another device.
+     */
+    fun startSignIn(canOpenBrowser: Boolean) {
         pollJob?.cancel()
         _state.value = SetupUiState.Working("Requesting a sign-in code…")
-        viewModelScope.launch {
+        pollJob = viewModelScope.launch {
             try {
                 // Guarantee the stable identifier before the first plex.tv call.
                 val clientId = container.settingsRepository.ensureClientIdentifier()
                 container.lazyClientId = clientId
-                val pin = container.plexTvClient.createPin()
-                _state.value = SetupUiState.AwaitingBrowser(
-                    code = pin.code,
-                    authUrl = PlexTvClient.buildAuthUrl(
-                        clientIdentifier = clientId,
+                val pin = container.plexTvClient.createPin(strong = canOpenBrowser)
+                _state.value = if (canOpenBrowser) {
+                    SetupUiState.AwaitingBrowser(
                         code = pin.code,
-                    ),
-                )
+                        authUrl = PlexTvClient.buildAuthUrl(
+                            clientIdentifier = clientId,
+                            code = pin.code,
+                        ),
+                    )
+                } else {
+                    SetupUiState.AwaitingLinkCode(pin.code)
+                }
                 pollUntilClaimed(pin.id)
             } catch (e: Exception) {
                 _state.value = SetupUiState.Error(userMessage(e, "Could not reach plex.tv."))
@@ -120,10 +130,10 @@ class SetupViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Convenience for the retry path: uses the stored account token. */
-    fun rediscoverServers() {
+    fun rediscoverServers(canOpenBrowser: Boolean) {
         viewModelScope.launch {
             val token = container.settingsRepository.settings.first().accountToken
-            if (token != null) discoverServers(token) else startSignIn()
+            if (token != null) discoverServers(token) else startSignIn(canOpenBrowser)
         }
     }
 

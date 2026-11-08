@@ -42,9 +42,13 @@ class PlexTvClient(
             java.net.URLEncoder.encode(value, "UTF-8")
     }
 
-    /** Requests a new sign-in PIN. `strong` gives a longer-lived code. */
-    suspend fun createPin(): PinResponse =
-        fetch("$PLEX_TV/api/v2/pins?strong=true".toHttpUrl(), token = null, method = "POST")
+    /**
+     * Requests a new sign-in PIN. [strong] gives a longer code that only the
+     * Auth App link can claim; without it the 4-character code can be typed
+     * at plex.tv/link (for devices with no browser).
+     */
+    suspend fun createPin(strong: Boolean = true): PinResponse =
+        fetch("$PLEX_TV/api/v2/pins?strong=$strong".toHttpUrl(), token = null, method = "POST")
             .let { PlexJson.decodeFromString<PinResponse>(it) }
 
     /** Polls a PIN; [PinResponse.authToken] is non-null once the user has signed in. */
